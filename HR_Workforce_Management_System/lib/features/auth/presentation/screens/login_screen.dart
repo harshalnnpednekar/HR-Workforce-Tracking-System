@@ -48,12 +48,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     String? role;
 
     if (_isLoginMode) {
-      role = await ref.read(authControllerProvider.notifier).login(
-            _emailController.text.trim(),
-            _passwordController.text.trim(),
-          );
+      role = await ref
+          .read(authControllerProvider.notifier)
+          .login(_emailController.text.trim(), _passwordController.text.trim());
     } else {
-      role = await ref.read(authControllerProvider.notifier).register(
+      role = await ref
+          .read(authControllerProvider.notifier)
+          .register(
             name: _nameController.text.trim(),
             email: _emailController.text.trim(),
             password: _passwordController.text.trim(),
@@ -68,10 +69,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final errorMsg = ref.read(authControllerProvider).errorMessage;
       if (errorMsg != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMsg),
-            backgroundColor: Colors.redAccent,
-          ),
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.redAccent),
         );
       }
       return;
@@ -130,9 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         // --- Welcome Text ---
                         Text(
                           'Smart Workforce Portal',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
+                          style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: AppTheme.primaryBlue,
                                 fontWeight: FontWeight.bold,
@@ -147,9 +143,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ? 'Sign in to continue'
                                 : 'Create your account',
                             key: ValueKey<bool>(_isLoginMode),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: Colors.grey[600]),
                           ),
                         ),
@@ -182,11 +176,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                                     // Role Dropdown
                                     DropdownButtonFormField<String>(
-                                      value: _selectedRole,
+                                      initialValue: _selectedRole,
                                       decoration: const InputDecoration(
                                         labelText: 'Select Role',
-                                        prefixIcon:
-                                            Icon(Icons.badge_outlined),
+                                        prefixIcon: Icon(Icons.badge_outlined),
                                       ),
                                       items: const [
                                         DropdownMenuItem(
@@ -205,8 +198,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       },
                                       validator: (value) {
                                         if (!_isLoginMode &&
-                                            (value == null ||
-                                                value.isEmpty)) {
+                                            (value == null || value.isEmpty)) {
                                           return 'Please select a role.';
                                         }
                                         return null;
@@ -284,8 +276,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                   )
                                 : AnimatedSwitcher(
-                                    duration:
-                                        const Duration(milliseconds: 250),
+                                    duration: const Duration(milliseconds: 250),
                                     child: Text(
                                       _isLoginMode ? 'Login' : 'Register',
                                       key: ValueKey<bool>(_isLoginMode),
