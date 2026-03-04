@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../auth/presentation/controllers/login_controller.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 
 /// A widget that displays a menu of settings and actions for the employee.
 class ProfileMenu extends ConsumerWidget {
@@ -103,7 +103,7 @@ class ProfileMenu extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await ref.read(loginControllerProvider.notifier).logout();
+              ref.read(authControllerProvider.notifier).logout();
               if (context.mounted) {
                 context.go('/login');
               }

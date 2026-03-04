@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../widgets/attendance_card.dart';
 import '../widgets/quick_stats_section.dart';
 import 'my_tasks_view.dart';
@@ -27,6 +28,10 @@ class _EmployeeDashboardScreenState
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = ref.watch(authControllerProvider).user;
+    final userName = currentUser?.name ?? 'User';
+    final firstLetter = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -56,7 +61,7 @@ class _EmployeeDashboardScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Hello, John Doe',
+                          'Hello, $userName',
                           style: GoogleFonts.outfit(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -88,10 +93,17 @@ class _EmployeeDashboardScreenState
                         ),
                       ],
                     ),
-                    child: const CircleAvatar(
+                    child: CircleAvatar(
                       radius: 24,
-                      backgroundImage: NetworkImage(
-                        'https://i.pravatar.cc/150?u=john',
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primary,
+                      child: Text(
+                        firstLetter,
+                        style: GoogleFonts.outfit(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),

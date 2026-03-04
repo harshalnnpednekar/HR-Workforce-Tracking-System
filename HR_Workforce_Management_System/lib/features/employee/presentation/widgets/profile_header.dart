@@ -2,11 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// A widget that displays the employee's profile header (avatar, name, title).
+///
+/// All display values are passed in as constructor parameters so they
+/// reflect the dynamically authenticated user.
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({super.key});
+  const ProfileHeader({
+    super.key,
+    required this.name,
+    required this.role,
+    required this.id,
+  });
+
+  /// The user's display name.
+  final String name;
+
+  /// The user's role (e.g. 'admin', 'employee').
+  final String role;
+
+  /// The user's unique ID.
+  final String id;
 
   @override
   Widget build(BuildContext context) {
+    final firstLetter = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
     return Column(
       children: [
         Stack(
@@ -34,10 +53,16 @@ class ProfileHeader extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: Colors.white,
               ),
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 radius: 50,
-                backgroundImage: NetworkImage(
-                  'https://i.pravatar.cc/150?u=john',
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                child: Text(
+                  firstLetter,
+                  style: GoogleFonts.outfit(
+                    fontSize: 42,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -45,7 +70,7 @@ class ProfileHeader extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Text(
-          'John Doe',
+          name,
           style: GoogleFonts.outfit(
             fontSize: 32,
             fontWeight: FontWeight.bold,
@@ -61,7 +86,7 @@ class ProfileHeader extends StatelessWidget {
             borderRadius: BorderRadius.circular(100),
           ),
           child: Text(
-            'Software Engineer • EMP-4092',
+            '${role.toUpperCase()} • $id',
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey.shade700,
