@@ -1,31 +1,20 @@
-"""
-Database connection helper for Microsoft SQL Server via pymssql.
+﻿"""
+Database connection helper for SQLite.
 
-Reads connection parameters from .env file.
-Supports both SQL Server Authentication and Windows Authentication.
+Automatically creates the users.db file and handles initialization.
 """
 
+import sqlite3
 import os
-import pymssql
-from dotenv import load_dotenv
 
-load_dotenv()
-
-MSSQL_SERVER = os.getenv("MSSQL_SERVER", "localhost")
-MSSQL_DATABASE = os.getenv("MSSQL_DATABASE", "HRWorkforceDB")
-MSSQL_USERNAME = os.getenv("MSSQL_USERNAME", "")
-MSSQL_PASSWORD = os.getenv("MSSQL_PASSWORD", "")
-
+DB_PATH = os.path.join(os.path.dirname(__file__), "users.db")
 
 def get_connection():
-    """Return a new pymssql connection to the configured MSSQL instance."""
-    return pymssql.connect(
-        server=MSSQL_SERVER,
-        user=MSSQL_USERNAME if MSSQL_USERNAME else None,
-        password=MSSQL_PASSWORD if MSSQL_PASSWORD else None,
-        database=MSSQL_DATABASE,
-    )
-
+    """Return a new sqlite3 connection to the local database."""
+    conn = sqlite3.connect(DB_PATH)
+    # This allows accessing columns by name like row["Email"]
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db() -> None:
     """Create the Users table and seed the default admin if not present."""
@@ -33,28 +22,24 @@ def init_db() -> None:
     cursor = conn.cursor()
 
     cursor.execute("""
-        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
-        BEGIN
-            CREATE TABLE Users (
-                Id          NVARCHAR(50)   PRIMARY KEY,
-                Name        NVARCHAR(100)  NOT NULL,
-                Email       NVARCHAR(150)  NOT NULL UNIQUE,
-                Role        NVARCHAR(20)   NOT NULL DEFAULT 'employee',
-                Password    NVARCHAR(255)  NOT NULL,
-                CreatedAt   DATETIME2      NOT NULL DEFAULT GETDATE()
-            );
-        END
+        CREATE TABLE IF NOT EXISTS Users (
+            Id          TEXT PRIMARY KEY,
+            Name        TEXT NOT NULL,
+            Email       TEXT NOT NULL UNIQUE,
+            Role        TEXT NOT NULL DEFAULT 'employee',
+            Password    TEXT NOT NULL,
+            CreatedAt   DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
     """)
 
-    cursor.execute("""
-        IF NOT EXISTS (SELECT 1 FROM Users WHERE Email = 'admin@hr.com')
-        BEGIN
+    # Check for default admin
+    cursor.execute("SELECT 1 FROM Users WHERE Email = ?", ("admin@hr.com",))
+    if not cursor.fetchone():
+        cursor.execute("""
             INSERT INTO Users (Id, Name, Email, Role, Password)
-            VALUES ('admin-1', 'System Admin', 'admin@hr.com', 'admin', 'password123');
-        END
-    """)
+            VALUES (?, ?, ?, ?, ?);
+        """, ('admin-1', 'System Admin', 'admin@hr.com', 'admin', 'password123'))
+        conn.commit()
 
-    conn.commit()
-    cursor.close()
     conn.close()
-    print("✅ Database initialized — Users table ready.")
+    print("Database initialized - Users table ready.")

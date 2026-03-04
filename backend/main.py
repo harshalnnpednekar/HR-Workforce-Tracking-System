@@ -1,5 +1,5 @@
-"""
-HR Workforce Tracking System — FastAPI Backend
+﻿"""
+HR Workforce Tracking System â€” FastAPI Backend
 
 Provides /api/register and /api/login endpoints backed by MSSQL.
 """
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from database import get_connection, init_db
 
-# ── App setup ────────────────────────────────────────────────
+# â”€â”€ App setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app = FastAPI(title="HR Workforce API", version="1.0.0")
 
 app.add_middleware(
@@ -28,7 +28,7 @@ def on_startup():
     init_db()
 
 
-# ── Request / Response models ────────────────────────────────
+# â”€â”€ Request / Response models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class RegisterRequest(BaseModel):
     name: str
@@ -49,16 +49,16 @@ class UserResponse(BaseModel):
     role: str
 
 
-# ── Endpoints ────────────────────────────────────────────────
+# â”€â”€ Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.post("/api/register", response_model=UserResponse)
 def register(body: RegisterRequest):
     """Register a new user and persist to MSSQL."""
     conn = get_connection()
-    cursor = conn.cursor(as_dict=True)
+    cursor = conn.cursor()
 
     # Check duplicate email
-    cursor.execute("SELECT Id FROM Users WHERE Email = %s", (body.email,))
+    cursor.execute("SELECT Id FROM Users WHERE Email = ?", (body.email,))
     if cursor.fetchone():
         cursor.close()
         conn.close()
@@ -67,7 +67,7 @@ def register(body: RegisterRequest):
     user_id = str(int(datetime.datetime.now().timestamp() * 1000))
 
     cursor.execute(
-        "INSERT INTO Users (Id, Name, Email, Role, Password) VALUES (%s, %s, %s, %s, %s)",
+        "INSERT INTO Users (Id, Name, Email, Role, Password) VALUES (?, ?, ?, ?, ?)",
         (user_id, body.name, body.email, body.role.lower(), body.password),
     )
     conn.commit()
@@ -81,9 +81,9 @@ def register(body: RegisterRequest):
 def login(body: LoginRequest):
     """Authenticate an existing user against MSSQL."""
     conn = get_connection()
-    cursor = conn.cursor(as_dict=True)
+    cursor = conn.cursor()
 
-    cursor.execute("SELECT Id, Name, Email, Role, Password FROM Users WHERE Email = %s", (body.email,))
+    cursor.execute("SELECT Id, Name, Email, Role, Password FROM Users WHERE Email = ?", (body.email,))
     row = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -101,3 +101,4 @@ def login(body: LoginRequest):
 def health():
     """Simple health-check endpoint."""
     return {"status": "ok"}
+
