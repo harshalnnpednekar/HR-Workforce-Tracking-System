@@ -1,52 +1,105 @@
-import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_model.dart';
 
-/// Repository that handles authentication via the FastAPI backend.
+/// Handles authentication and user profile operations via Firebase.
 ///
-/// All requests go to the MSSQL-backed API running at [_baseUrl].
-/// Falls back to a clear error message if the server is unreachable.
+/// Firebase Auth stores credentials using the pattern:
+///   email = "username@hrapp.internal"
+/// so users only ever see/type their plain username.
 class AuthRepository {
-  static const String _baseUrl = 'http://localhost:8000/api';
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-      headers: {'Content-Type': 'application/json'},
-    ),
-  );
-
-  /// Authenticates an existing user via the backend.
-  ///
-  /// Sends email + password to POST /api/login.
-  /// Throws on invalid credentials or server errors.
+  /// Signs in with [username] + [password].
+  /// Fetches the user profile document from the `users` Firestore collection.
   Future<UserModel> login({
-    required String email,
+    required String username,
     required String password,
   }) async {
+    final email = '${username.trim().toLowerCase()}@hrapp.internal';
     try {
-      final response = await _dio.post(
-        '/login',
-        data: {'email': email, 'password': password},
-      );
-
-      final data = response.data as Map<String, dynamic>;
-      return UserModel(
-        id: data['id'],
-        name: data['name'],
-        email: data['email'],
-        role: data['role'],
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email,
         password: password,
       );
-    } on DioException catch (e) {
-      if (e.response != null) {
-        final detail = e.response?.data['detail'] ?? 'Login failed.';
-        throw Exception(detail);
-      }
-      throw Exception('Cannot reach server. Is the backend running?');
+      final doc = await _firestore
+          .collection('users')
+          .doc(cred.user!.uid)
+          .get();
+      if (!doc.exists) throw Exception('User profile not found in database.');
+      return UserModel.fromFirestore(cred.user!.uid, doc.data()!);
+    } on FirebaseAuthException catch (e) {
+      throw Exception(_mapAuthError(e.code));
     }
   }
+
+  /// Creates a new user (admin only). Stores profile in Firestore.
+  Future<UserModel> createUser({
+    required String username,
+    required String name,
+    required String password,
+    required String role,
+    String? phone,
+    String? department,
+  }) async {
+    final email = '${username.trim().toLowerCase()}@hrapp.internal';
+    try {
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = UserModel(
+        id: cred.user!.uid,
+        name: name,
+        username: username.trim().toLowerCase(),
+        email: email,
+        role: role,
+        phone: phone,
+        department: department,
+      );
+      await _firestore
+          .collection('users')
+          .doc(cred.user!.uid)
+          .set(user.toFirestore());
+      return user;
+    } on FirebaseAuthException catch (e) {
+      throw Exception(_mapAuthError(e.code));
+    }
+  }
+
+  /// Signs the current user out.
+  Future<void> logout() => _auth.signOut();
+
+  /// Returns the currently signed-in Firebase user, or null.
+  User? get currentUser => _auth.currentUser;
+
+  /// Re-fetches the current user's Firestore profile.
+  Future<UserModel?> fetchCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    if (!doc.exists) return null;
+    return UserModel.fromFirestore(user.uid, doc.data()!);
+  }
+
+  String _mapAuthError(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'Username not found.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'invalid-credential':
+        return 'Invalid username or password.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'too-many-requests':
+        return 'Too many attempts. Try again later.';
+      default:
+        return 'Authentication failed ($code).';
+    }
+  }
+}
 
   /// Registers a new user via the backend.
   ///

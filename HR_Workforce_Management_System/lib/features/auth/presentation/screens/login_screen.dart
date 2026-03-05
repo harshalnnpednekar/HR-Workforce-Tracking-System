@@ -6,9 +6,7 @@ import '../controllers/auth_controller.dart';
 
 /// LoginScreen is the entry point for user authentication.
 ///
-/// Supports both **Login** and **Sign Up** modes.  In Sign Up mode two
-/// additional animated fields (Full Name and Role) are revealed using
-/// [AnimatedSize] for a premium feel.
+/// Provides a clean login form for employees and admins.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,23 +16,19 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _nameController = TextEditingController();
   bool _obscurePassword = true;
-  bool _isLoginMode = true;
-  String? _selectedRole;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
-    _nameController.dispose();
     super.dispose();
   }
 
-  /// Handles the primary action (Login or Register).
-  Future<void> _handleSubmit() async {
+  /// Handles login authentication.
+  Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -45,21 +39,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    String? role;
-
-    if (_isLoginMode) {
-      role = await ref.read(authControllerProvider.notifier).login(
-            _emailController.text.trim(),
-            _passwordController.text.trim(),
-          );
-    } else {
-      role = await ref.read(authControllerProvider.notifier).register(
-            name: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-            role: _selectedRole!,
-          );
-    }
+    final role = await ref
+        .read(authControllerProvider.notifier)
+        .login(
+          _usernameController.text.trim(),
+          _passwordController.text.trim(),
+        );
 
     if (!mounted) return;
 
@@ -68,10 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final errorMsg = ref.read(authControllerProvider).errorMessage;
       if (errorMsg != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMsg),
-            backgroundColor: Colors.redAccent,
-          ),
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.redAccent),
         );
       }
       return;
@@ -130,9 +112,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         // --- Welcome Text ---
                         Text(
                           'Smart Workforce Portal',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
+                          style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: AppTheme.primaryBlue,
                                 fontWeight: FontWeight.bold,
@@ -140,96 +120,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          child: Text(
-                            _isLoginMode
-                                ? 'Sign in to continue'
-                                : 'Create your account',
-                            key: ValueKey<bool>(_isLoginMode),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
+                        Text(
+                          'Sign in to continue',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.grey[600]),
                         ),
                         const SizedBox(height: 32),
 
-                        // --- Dynamic Sign-Up Fields (Name + Role) ---
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeInOut,
-                          child: _isLoginMode
-                              ? const SizedBox.shrink()
-                              : Column(
-                                  children: [
-                                    // Full Name
-                                    _LoginTextField(
-                                      controller: _nameController,
-                                      label: 'Full Name',
-                                      hint: 'John Doe',
-                                      prefixIcon: Icons.person,
-                                      validator: (value) {
-                                        if (!_isLoginMode &&
-                                            (value == null ||
-                                                value.trim().isEmpty)) {
-                                          return 'Name is required.';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    const SizedBox(height: 20),
-
-                                    // Role Dropdown
-                                    DropdownButtonFormField<String>(
-                                      value: _selectedRole,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Select Role',
-                                        prefixIcon:
-                                            Icon(Icons.badge_outlined),
-                                      ),
-                                      items: const [
-                                        DropdownMenuItem(
-                                          value: 'admin',
-                                          child: Text('Admin'),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: 'employee',
-                                          child: Text('Employee'),
-                                        ),
-                                      ],
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _selectedRole = value;
-                                        });
-                                      },
-                                      validator: (value) {
-                                        if (!_isLoginMode &&
-                                            (value == null ||
-                                                value.isEmpty)) {
-                                          return 'Please select a role.';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    const SizedBox(height: 20),
-                                  ],
-                                ),
-                        ),
-
-                        // --- Email Field ---
+                        // --- Username Field ---
                         _LoginTextField(
-                          controller: _emailController,
-                          label: 'Email',
-                          hint: 'you@example.com',
-                          prefixIcon: Icons.email_outlined,
-                          keyboardType: TextInputType.emailAddress,
+                          controller: _usernameController,
+                          label: 'Username',
+                          hint: 'Enter your username',
+                          prefixIcon: Icons.person_outline,
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'Email is required.';
-                            }
-                            if (!value.contains('@')) {
-                              return 'Enter a valid email address.';
+                              return 'Username is required.';
                             }
                             return null;
                           },
@@ -268,12 +174,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         const SizedBox(height: 28),
 
-                        // --- Login / Register Button ---
+                        // --- Login Button ---
                         SizedBox(
                           width: double.infinity,
                           height: 50,
                           child: ElevatedButton(
-                            onPressed: isLoading ? null : _handleSubmit,
+                            onPressed: isLoading ? null : _handleLogin,
                             child: isLoading
                                 ? const SizedBox(
                                     height: 24,
@@ -283,46 +189,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : AnimatedSwitcher(
-                                    duration:
-                                        const Duration(milliseconds: 250),
-                                    child: Text(
-                                      _isLoginMode ? 'Login' : 'Register',
-                                      key: ValueKey<bool>(_isLoginMode),
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                : const Text(
+                                    'Login',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // --- Mode Toggle ---
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _isLoginMode = !_isLoginMode;
-                              // Reset sign-up-only fields when toggling
-                              if (_isLoginMode) {
-                                _nameController.clear();
-                                _selectedRole = null;
-                              }
-                            });
-                          },
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: Text(
-                              _isLoginMode
-                                  ? "Don't have an account? Sign Up"
-                                  : 'Already have an account? Log In',
-                              key: ValueKey<bool>(_isLoginMode),
-                              style: TextStyle(
-                                color: AppTheme.primaryBlue,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                           ),
                         ),
                       ],

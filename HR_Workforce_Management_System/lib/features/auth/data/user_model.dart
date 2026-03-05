@@ -1,36 +1,76 @@
-/// Data model representing a user in the system.
+/// Data model representing an HR system user.
 ///
-/// Holds the user's unique [id], display [name], login [email],
-/// [role] (either 'admin' or 'employee'), and [password].
+/// [id] is the Firebase Auth UID.
+/// [role] is either 'admin' or 'employee'.
 class UserModel {
   final String id;
   final String name;
+  final String username;
   final String email;
   final String role;
-  final String password;
+  final String? phone;
+  final String? designationId;
+  final String? department;
+  final bool isActive;
 
   const UserModel({
     required this.id,
     required this.name,
+    required this.username,
     required this.email,
     required this.role,
-    required this.password,
+    this.phone,
+    this.designationId,
+    this.department,
+    this.isActive = true,
   });
 
-  /// Creates a copy of this [UserModel] with optional field overrides.
+  factory UserModel.fromFirestore(String uid, Map<String, dynamic> data) {
+    return UserModel(
+      id: uid,
+      name: data['name'] ?? '',
+      username: data['username'] ?? '',
+      email: data['email'] ?? '',
+      role: data['role'] ?? 'employee',
+      phone: data['phone'],
+      designationId: data['designationId'],
+      department: data['department'],
+      isActive: data['isActive'] ?? true,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() => {
+    'name': name,
+    'username': username,
+    'email': email,
+    'role': role,
+    'phone': phone,
+    'designationId': designationId,
+    'department': department,
+    'isActive': isActive,
+  };
+
   UserModel copyWith({
     String? id,
     String? name,
+    String? username,
     String? email,
     String? role,
-    String? password,
+    String? phone,
+    String? designationId,
+    String? department,
+    bool? isActive,
   }) {
     return UserModel(
       id: id ?? this.id,
       name: name ?? this.name,
+      username: username ?? this.username,
       email: email ?? this.email,
       role: role ?? this.role,
-      password: password ?? this.password,
+      phone: phone ?? this.phone,
+      designationId: designationId ?? this.designationId,
+      department: department ?? this.department,
+      isActive: isActive ?? this.isActive,
     );
   }
 }

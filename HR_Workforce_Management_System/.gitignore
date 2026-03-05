@@ -43,3 +43,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+/android/app/src/main/java/io/flutter/plugins/
+/ios/Runner/GeneratedPluginRegistrant.*
+/windows/flutter/generated_plugin_registrant.*
+
+# Firebase
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
+
+# Firebase sensitive config files (keep out of public repos)
+# To use, add real files to a secure location and reference via CI/CD secrets
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
