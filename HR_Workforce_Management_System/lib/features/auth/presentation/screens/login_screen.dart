@@ -54,6 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (errorMsg != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMsg), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.redAccent),
         );
       }
       return;
@@ -112,6 +113,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         // --- Welcome Text ---
                         Text(
                           'Smart Workforce Portal',
+                          style: Theme.of(context).textTheme.headlineSmall
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: AppTheme.primaryBlue,
