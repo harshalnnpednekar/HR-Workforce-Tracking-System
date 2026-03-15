@@ -77,7 +77,7 @@ flutter pub get
 | `email`        | string  | `admin@hrapp.internal`  |
 | `role`         | string  | `admin`                 |
 | `phone`        | string  | *(optional)*            |
-| `department`   | string  | `HR`                    |
+| `department`   | string  | `Administrator`         |
 | `isActive`     | boolean | `true`                  |
 | `joinDate`     | string  | `2026-01-01`            |
 
@@ -115,7 +115,7 @@ For every employee, repeat **Step 6**:
 | `username`   | Same prefix used in email      |
 | `email`      | `username@hrapp.internal`      |
 | `role`       | `employee`                     |
-| `department` | e.g. `Engineering`             |
+| `department` | e.g. `Developer`               |
 | `phone`      | *(optional)*                   |
 | `isActive`   | `true`                         |
 | `joinDate`   | `YYYY-MM-DD`                   |
@@ -126,6 +126,13 @@ For every employee, repeat **Step 6**:
 
 ### `users`
 Stores user profiles. Document ID = Firebase Auth UID.
+
+Recommended `department` values:
+- `Administrator`
+- `Developer`
+- `CRM`
+- `Project Manager`
+- `Trainee`
 
 ```
 users/

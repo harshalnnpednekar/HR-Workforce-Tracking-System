@@ -8,8 +8,8 @@ final List<UserModel> mockDatabase = [
   const UserModel(
     id: 'admin-1',
     name: 'System Admin',
-    email: 'admin@hr.com',
+    username: 'admin',
+    email: 'admin@hrapp.internal',
     role: 'admin',
-    password: 'password123',
   ),
 ];

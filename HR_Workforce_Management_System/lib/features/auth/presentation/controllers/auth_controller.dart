@@ -24,10 +24,11 @@ class AuthState {
   }
 }
 
-final authControllerProvider =
-    StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController();
-});
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+  (ref) {
+    return AuthController();
+  },
+);
 
 class AuthController extends StateNotifier<AuthState> {
   AuthController() : super(const AuthState());
@@ -63,20 +64,5 @@ class AuthController extends StateNotifier<AuthState> {
     if (user != null) {
       state = state.copyWith(user: user);
     }
-  }
-}
-      return user.role;
-    } on Exception catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: e.toString().replaceAll('Exception: ', ''),
-      );
-      return null;
-    }
-  }
-
-  /// Clears the authenticated user (logout).
-  void logout() {
-    state = const AuthState();
   }
 }

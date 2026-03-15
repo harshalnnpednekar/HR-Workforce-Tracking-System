@@ -17,18 +17,18 @@ class AuthRepository {
     required String username,
     required String password,
   }) async {
-    final email = '${username.trim().toLowerCase()}@hrapp.internal';
+    final identifier = username.trim();
+    final email = await _resolveLoginEmail(identifier);
     try {
       final cred = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      final doc = await _firestore
-          .collection('users')
-          .doc(cred.user!.uid)
-          .get();
-      if (!doc.exists) throw Exception('User profile not found in database.');
-      return UserModel.fromFirestore(cred.user!.uid, doc.data()!);
+      return await _loadUserProfile(
+        user: cred.user!,
+        loginIdentifier: identifier,
+        signedInEmail: email,
+      );
     } on FirebaseAuthException catch (e) {
       throw Exception(_mapAuthError(e.code));
     }
@@ -78,9 +78,99 @@ class AuthRepository {
   Future<UserModel?> fetchCurrentUser() async {
     final user = _auth.currentUser;
     if (user == null) return null;
-    final doc = await _firestore.collection('users').doc(user.uid).get();
-    if (!doc.exists) return null;
-    return UserModel.fromFirestore(user.uid, doc.data()!);
+    try {
+      return await _loadUserProfile(user: user);
+    } on Exception {
+      return null;
+    }
+  }
+
+  Future<String> _resolveLoginEmail(String identifier) async {
+    final cleaned = identifier.trim();
+    if (cleaned.contains('@')) {
+      return cleaned.toLowerCase();
+    }
+
+    final users = _firestore.collection('users');
+    final directUsername = await users
+        .where('username', isEqualTo: cleaned)
+        .limit(1)
+        .get();
+    if (directUsername.docs.isNotEmpty) {
+      final data = directUsername.docs.first.data();
+      final email = (data['email'] as String?)?.trim();
+      if (email != null && email.isNotEmpty) {
+        return email.toLowerCase();
+      }
+    }
+
+    final lowerUsername = cleaned.toLowerCase();
+    if (lowerUsername != cleaned) {
+      final normalizedUsername = await users
+          .where('username', isEqualTo: lowerUsername)
+          .limit(1)
+          .get();
+      if (normalizedUsername.docs.isNotEmpty) {
+        final data = normalizedUsername.docs.first.data();
+        final email = (data['email'] as String?)?.trim();
+        if (email != null && email.isNotEmpty) {
+          return email.toLowerCase();
+        }
+      }
+    }
+
+    return '$lowerUsername@hrapp.internal';
+  }
+
+  Future<UserModel> _loadUserProfile({
+    required User user,
+    String? loginIdentifier,
+    String? signedInEmail,
+  }) async {
+    final users = _firestore.collection('users');
+
+    final uidDoc = await users.doc(user.uid).get();
+    if (uidDoc.exists) {
+      return UserModel.fromFirestore(uidDoc.id, uidDoc.data()!);
+    }
+
+    final email = (signedInEmail ?? user.email)?.trim().toLowerCase();
+    if (email != null && email.isNotEmpty) {
+      final emailDoc = await users
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      if (emailDoc.docs.isNotEmpty) {
+        final doc = emailDoc.docs.first;
+        return UserModel.fromFirestore(doc.id, doc.data());
+      }
+    }
+
+    final identifier = loginIdentifier?.trim();
+    if (identifier != null && identifier.isNotEmpty) {
+      final usernameDoc = await users
+          .where('username', isEqualTo: identifier)
+          .limit(1)
+          .get();
+      if (usernameDoc.docs.isNotEmpty) {
+        final doc = usernameDoc.docs.first;
+        return UserModel.fromFirestore(doc.id, doc.data());
+      }
+
+      final lower = identifier.toLowerCase();
+      if (lower != identifier) {
+        final normalizedDoc = await users
+            .where('username', isEqualTo: lower)
+            .limit(1)
+            .get();
+        if (normalizedDoc.docs.isNotEmpty) {
+          final doc = normalizedDoc.docs.first;
+          return UserModel.fromFirestore(doc.id, doc.data());
+        }
+      }
+    }
+
+    throw Exception('User profile not found in database.');
   }
 
   String _mapAuthError(String code) {
@@ -97,45 +187,6 @@ class AuthRepository {
         return 'Too many attempts. Try again later.';
       default:
         return 'Authentication failed ($code).';
-    }
-  }
-}
-
-  /// Registers a new user via the backend.
-  ///
-  /// Sends name, email, password, role to POST /api/register.
-  /// The user is persisted in MSSQL.
-  Future<UserModel> register({
-    required String name,
-    required String email,
-    required String password,
-    required String role,
-  }) async {
-    try {
-      final response = await _dio.post(
-        '/register',
-        data: {
-          'name': name,
-          'email': email,
-          'password': password,
-          'role': role.toLowerCase(),
-        },
-      );
-
-      final data = response.data as Map<String, dynamic>;
-      return UserModel(
-        id: data['id'],
-        name: data['name'],
-        email: data['email'],
-        role: data['role'],
-        password: password,
-      );
-    } on DioException catch (e) {
-      if (e.response != null) {
-        final detail = e.response?.data['detail'] ?? 'Registration failed.';
-        throw Exception(detail);
-      }
-      throw Exception('Cannot reach server. Is the backend running?');
     }
   }
 }

@@ -49,14 +49,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
 
     if (role == null) {
-      // Show the error from state
-      final errorMsg = ref.read(authControllerProvider).errorMessage;
-      if (errorMsg != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMsg), backgroundColor: Colors.redAccent),
-          SnackBar(content: Text(errorMsg), backgroundColor: Colors.redAccent),
-        );
-      }
       return;
     }
 
@@ -71,6 +63,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
     final isLoading = authState.isLoading;
+
+    ref.listen<AuthState>(authControllerProvider, (previous, next) {
+      if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    });
 
     return Scaffold(
       body: SafeArea(
@@ -95,25 +98,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // --- Header Icon ---
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryBlue.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.admin_panel_settings,
-                            size: 48,
-                            color: AppTheme.primaryBlue,
-                          ),
+                        // --- Header Logo ---
+                        Image.asset(
+                          'assets/icons/equitec.gif',
+                          width: 200,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                                Icons.admin_panel_settings,
+                                size: 64,
+                                color: AppTheme.primaryBlue,
+                              ),
                         ),
                         const SizedBox(height: 20),
 
                         // --- Welcome Text ---
                         Text(
-                          'Smart Workforce Portal',
-                          style: Theme.of(context).textTheme.headlineSmall
+                          'Employee Login',
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(
                                 color: AppTheme.primaryBlue,

@@ -95,7 +95,7 @@ class AttendanceService {
         .where('userId', isEqualTo: userId)
         .where('date', isGreaterThanOrEqualTo: '$month-01')
         .where('date', isLessThanOrEqualTo: '$month-31')
-        .orderBy('date')
+        .orderBy('date')``
         .get();
     return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
   }
