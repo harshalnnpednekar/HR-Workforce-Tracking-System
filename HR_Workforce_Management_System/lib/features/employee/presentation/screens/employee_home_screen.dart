@@ -104,7 +104,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _HomeHeader(),
+          _HomeHeader(userId: widget.userId),
           const SizedBox(height: 22),
           FutureBuilder<Map<String, dynamic>?>(
             future: _userFuture,
@@ -317,7 +317,9 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader();
+  const _HomeHeader({required this.userId});
+
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +348,7 @@ class _HomeHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        const BellIcon(),
+        BellIcon(userId: userId),
         const SizedBox(width: 14),
         CircleAvatar(
           radius: 22,

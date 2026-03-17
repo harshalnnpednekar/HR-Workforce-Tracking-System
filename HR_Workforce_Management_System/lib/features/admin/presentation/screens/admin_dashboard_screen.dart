@@ -1,17 +1,20 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/services/notification_service.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../widgets/admin_navigation.dart';
 import '../widgets/admin_navigation_drawer.dart';
 import '../widgets/admin_ui_kit.dart';
-import 'admin_profile_screen.dart';
 import 'admin_employees_screen.dart';
 import 'admin_home_screen.dart';
 import 'admin_hr_policy_screen.dart';
 import 'admin_leave_management_screen.dart';
 import 'admin_payroll_screen.dart';
+import 'admin_profile_screen.dart';
 import 'admin_reports_screen.dart';
+import 'notifications_screen.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -110,6 +113,8 @@ class _AdminTopBar extends StatelessWidget {
         .map((part) => part.characters.first.toUpperCase())
         .join();
 
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 16, 18),
       decoration: const BoxDecoration(
@@ -137,36 +142,75 @@ class _AdminTopBar extends StatelessWidget {
               ),
             ),
           ),
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F6FA),
-                  borderRadius: BorderRadius.circular(16),
+          // ── Live Bell Badge ────────────────────────────────────────
+          StreamBuilder<int>(
+            stream: userId.isEmpty
+                ? Stream.value(0)
+                : NotificationService.streamUnreadCount(userId),
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => NotificationsScreen(
+                        userId: userId,
+                        isAdmin: true,
+                      ),
+                    ),
+                  );
+                },
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F6FA),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_rounded,
+                        color: Color(0xFF334155),
+                        size: 24,
+                      ),
+                    ),
+                    if (count > 0)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF4D1A),
+                            borderRadius: BorderRadius.circular(99),
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 1.8,
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            count > 9 ? '9+' : '$count',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                child: const Icon(
-                  Icons.notifications_rounded,
-                  color: Color(0xFF334155),
-                  size: 24,
-                ),
-              ),
-              Positioned(
-                top: 4,
-                right: 5,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF4D1A),
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: Colors.white, width: 1.8),
-                  ),
-                ),
-              ),
-            ],
+              );
+            },
           ),
           const SizedBox(width: 10),
           InkWell(
