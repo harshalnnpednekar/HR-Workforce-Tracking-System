@@ -1,14 +1,104 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../../../core/services/attendance_service.dart';
+import '../../../../core/services/user_service.dart';
 import 'shared/employee_dashboard_constants.dart';
 
-class EmployeeHomePage extends StatelessWidget {
-  const EmployeeHomePage({required this.name});
+class EmployeeHomePage extends StatefulWidget {
+  const EmployeeHomePage({
+    super.key,
+    required this.name,
+    required this.userId,
+    this.onOpenLeaves,
+    this.onOpenPayroll,
+  });
 
   final String name;
+  final String userId;
+  final VoidCallback? onOpenLeaves;
+  final VoidCallback? onOpenPayroll;
+
+  @override
+  State<EmployeeHomePage> createState() => _EmployeeHomePageState();
+}
+
+class _EmployeeHomePageState extends State<EmployeeHomePage> {
+  late Future<Map<String, dynamic>?> _userFuture;
+  late Future<double> _weeklyHoursFuture;
+  late Future<int> _lateMarksFuture;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSnapshotFutures();
+  }
+
+  void _loadSnapshotFutures() {
+    if (widget.userId.isEmpty) {
+      _userFuture = Future.value(null);
+      _weeklyHoursFuture = Future.value(0);
+      _lateMarksFuture = Future.value(0);
+      return;
+    }
+
+    _userFuture = UserService.getUser(widget.userId);
+    _weeklyHoursFuture = AttendanceService.getWeeklyHours(widget.userId);
+    _lateMarksFuture = AttendanceService.getMonthlyLateMarks(widget.userId);
+  }
+
+  Future<void> _onClockAction(_ClockButtonState state) async {
+    if (_busy || state == _ClockButtonState.done) return;
+    if (widget.userId.isEmpty) {
+      showActionMessage(
+        context,
+        'User session unavailable. Please login again.',
+      );
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+    });
+
+    try {
+      if (state == _ClockButtonState.clockIn) {
+        final time = await AttendanceService.clockIn(widget.userId);
+        if (!mounted) return;
+        showActionMessage(
+          context,
+          'Clock-in successful - ${DateFormat('hh:mm a').format(time)}',
+        );
+      } else {
+        final time = await AttendanceService.clockOut(widget.userId);
+        if (!mounted) return;
+        showActionMessage(
+          context,
+          'Clock-out successful - ${DateFormat('hh:mm a').format(time)}',
+        );
+      }
+
+      setState(_loadSnapshotFutures);
+    } on Exception catch (e) {
+      if (!mounted) return;
+      final message = e.toString().replaceAll('Exception: ', '');
+      showActionMessage(context, message);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final dateText = DateFormat('EEEE, MMM d, y').format(DateTime.now());
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 108),
       child: Column(
@@ -16,22 +106,31 @@ class EmployeeHomePage extends StatelessWidget {
         children: [
           const _HomeHeader(),
           const SizedBox(height: 22),
-          Text(
-            'Good Morning, $name',
-            style: GoogleFonts.outfit(
-              color: AppColors.title,
-              fontWeight: FontWeight.w700,
-              fontSize: 28,
-            ),
+          FutureBuilder<Map<String, dynamic>?>(
+            future: _userFuture,
+            builder: (context, snapshot) {
+              final dbName = (snapshot.data?['name'] as String?)?.trim();
+              final displayName = dbName == null || dbName.isEmpty
+                  ? widget.name
+                  : dbName;
+              return Text(
+                'Good Morning, $displayName',
+                style: GoogleFonts.outfit(
+                  color: AppColors.title,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 28,
+                ),
+              );
+            },
           ),
           const SizedBox(height: 8),
-          const Row(
+          Row(
             children: [
-              Icon(Icons.calendar_month_rounded, color: AppColors.muted),
-              SizedBox(width: 8),
+              const Icon(Icons.calendar_month_rounded, color: AppColors.muted),
+              const SizedBox(width: 8),
               Text(
-                'Monday, Oct 23, 2023',
-                style: TextStyle(
+                dateText,
+                style: const TextStyle(
                   color: AppColors.muted,
                   fontWeight: FontWeight.w500,
                   fontSize: 24,
@@ -40,27 +139,45 @@ class EmployeeHomePage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 22),
-          const _WeeklyHoursCard(),
+          FutureBuilder<double>(
+            future: _weeklyHoursFuture,
+            builder: (context, snapshot) {
+              final hours = snapshot.data ?? 0;
+              return _WeeklyHoursCard(hours: hours);
+            },
+          ),
           const SizedBox(height: 18),
-          const Row(
+          Row(
             children: [
               Expanded(
-                child: _MiniMetricCard(
-                  icon: Icons.beach_access_rounded,
-                  title: 'REM.',
-                  subtitle: 'Leave Balance',
-                  value: '14 Days',
+                child: FutureBuilder<Map<String, dynamic>?>(
+                  future: _userFuture,
+                  builder: (context, snapshot) {
+                    final leaveTotal = _leaveBalance(snapshot.data);
+                    return _MiniMetricCard(
+                      icon: Icons.beach_access_rounded,
+                      title: 'REM.',
+                      subtitle: 'Leave Balance',
+                      value: '$leaveTotal Days',
+                    );
+                  },
                 ),
               ),
-              SizedBox(width: 16),
+              const SizedBox(width: 16),
               Expanded(
-                child: _MiniMetricCard(
-                  icon: Icons.warning_amber_rounded,
-                  title: '',
-                  subtitle: 'Late Marks',
-                  value: '1',
-                  alert: '-1',
-                  iconColor: Color(0xFFE66021),
+                child: FutureBuilder<int>(
+                  future: _lateMarksFuture,
+                  builder: (context, snapshot) {
+                    final marks = snapshot.data ?? 0;
+                    return _MiniMetricCard(
+                      icon: Icons.warning_amber_rounded,
+                      title: '',
+                      subtitle: 'Late Marks',
+                      value: '$marks',
+                      alert: marks > 0 ? '-$marks' : null,
+                      iconColor: const Color(0xFFE66021),
+                    );
+                  },
                 ),
               ),
             ],
@@ -78,11 +195,22 @@ class EmployeeHomePage extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _QuickAction(
-                  label: 'CLOCK IN',
-                  icon: Icons.fingerprint_rounded,
-                  active: true,
-                  onTap: () => showActionMessage(context, 'Clock in captured.'),
+                child: StreamBuilder<Map<String, dynamic>?>(
+                  stream: widget.userId.isEmpty
+                      ? Stream<Map<String, dynamic>?>.value(null)
+                      : AttendanceService.streamTodayAttendance(widget.userId),
+                  builder: (context, snapshot) {
+                    final state = _clockButtonState(snapshot.data);
+                    final button = _clockButtonStyle(state);
+                    return _QuickAction(
+                      label: button.label,
+                      icon: button.icon,
+                      background: button.background,
+                      foreground: button.foreground,
+                      enabled: !_busy && state != _ClockButtonState.done,
+                      onTap: () => _onClockAction(state),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 14),
@@ -90,10 +218,7 @@ class EmployeeHomePage extends StatelessWidget {
                 child: _QuickAction(
                   label: 'LEAVE',
                   icon: Icons.event_note_rounded,
-                  onTap: () => showActionMessage(
-                    context,
-                    'Open leave request form from Leaves tab.',
-                  ),
+                  onTap: widget.onOpenLeaves,
                 ),
               ),
               const SizedBox(width: 14),
@@ -101,10 +226,7 @@ class EmployeeHomePage extends StatelessWidget {
                 child: _QuickAction(
                   label: 'PAYSLIP',
                   icon: Icons.payments_outlined,
-                  onTap: () => showActionMessage(
-                    context,
-                    'Payslip download action triggered.',
-                  ),
+                  onTap: widget.onOpenPayroll,
                 ),
               ),
             ],
@@ -137,10 +259,60 @@ class EmployeeHomePage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          const _RecentActivityCard(),
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: widget.userId.isEmpty
+                ? Stream<List<Map<String, dynamic>>>.value(const [])
+                : AttendanceService.streamRecentRecords(widget.userId),
+            builder: (context, snapshot) {
+              return _RecentActivityCard(records: snapshot.data ?? const []);
+            },
+          ),
         ],
       ),
     );
+  }
+
+  int _leaveBalance(Map<String, dynamic>? user) {
+    final casual = (user?['casualLeave'] as num?)?.toInt() ?? 0;
+    final sick = (user?['sickLeave'] as num?)?.toInt() ?? 0;
+    final earned = (user?['earnedLeave'] as num?)?.toInt() ?? 0;
+    return casual + sick + earned;
+  }
+
+  _ClockButtonState _clockButtonState(Map<String, dynamic>? record) {
+    if (record == null || record['clockIn'] == null) {
+      return _ClockButtonState.clockIn;
+    }
+    if (record['clockOut'] == null) {
+      return _ClockButtonState.clockOut;
+    }
+    return _ClockButtonState.done;
+  }
+
+  _QuickActionStyle _clockButtonStyle(_ClockButtonState state) {
+    switch (state) {
+      case _ClockButtonState.clockIn:
+        return const _QuickActionStyle(
+          label: 'CLOCK IN',
+          icon: Icons.fingerprint_rounded,
+          background: AppColors.primary,
+          foreground: Colors.white,
+        );
+      case _ClockButtonState.clockOut:
+        return const _QuickActionStyle(
+          label: 'CLOCK OUT',
+          icon: Icons.logout_rounded,
+          background: Color(0xFFF6E3DF),
+          foreground: Color(0xFFB7401C),
+        );
+      case _ClockButtonState.done:
+        return const _QuickActionStyle(
+          label: 'DONE TODAY',
+          icon: Icons.check_circle_outline_rounded,
+          background: Color(0xFFE9EDF3),
+          foreground: Color(0xFF6A7B95),
+        );
+    }
   }
 }
 
@@ -194,7 +366,9 @@ class _HomeHeader extends StatelessWidget {
 }
 
 class _WeeklyHoursCard extends StatelessWidget {
-  const _WeeklyHoursCard();
+  const _WeeklyHoursCard({required this.hours});
+
+  final double hours;
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +403,7 @@ class _WeeklyHoursCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '38h 20m',
+                  _formatHours(hours),
                   style: GoogleFonts.outfit(
                     color: AppColors.title,
                     fontSize: 22,
@@ -242,13 +416,13 @@ class _WeeklyHoursCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
-              color: const Color(0xFFDFF3EA),
+              color: const Color(0xFFEAF3FF),
               borderRadius: BorderRadius.circular(18),
             ),
             child: const Text(
-              '+2h',
+              '7D',
               style: TextStyle(
-                color: Color(0xFF159A67),
+                color: Color(0xFF2A5FA8),
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
               ),
@@ -257,6 +431,15 @@ class _WeeklyHoursCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatHours(double totalHours) {
+    final wholeHours = totalHours.floor();
+    final minutes = ((totalHours - wholeHours) * 60).round();
+    if (minutes == 60) {
+      return '${wholeHours + 1}h 0m';
+    }
+    return '${wholeHours}h ${minutes}m';
   }
 }
 
@@ -339,13 +522,17 @@ class _QuickAction extends StatelessWidget {
   const _QuickAction({
     required this.label,
     required this.icon,
-    this.active = false,
+    this.background = Colors.white,
+    this.foreground = AppColors.primary,
+    this.enabled = true,
     this.onTap,
   });
 
   final String label;
   final IconData icon;
-  final bool active;
+  final Color background;
+  final Color foreground;
+  final bool enabled;
   final VoidCallback? onTap;
 
   @override
@@ -355,16 +542,16 @@ class _QuickAction extends StatelessWidget {
       borderRadius: BorderRadius.circular(28),
       child: InkWell(
         borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Container(
           height: 134,
           decoration: BoxDecoration(
-            color: active ? AppColors.primary : Colors.white,
+            color: background,
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: active ? AppColors.primary : AppColors.cardBorder,
+              color: enabled ? foreground.withAlpha(128) : AppColors.cardBorder,
             ),
-            boxShadow: active
+            boxShadow: background == AppColors.primary
                 ? const [
                     BoxShadow(
                       color: Color(0x2CF48300),
@@ -380,16 +567,16 @@ class _QuickAction extends StatelessWidget {
               Icon(
                 icon,
                 size: 34,
-                color: active ? Colors.white : AppColors.primary,
+                color: enabled ? foreground : const Color(0xFF9DA9BD),
               ),
               const SizedBox(height: 12),
               Text(
                 label,
                 style: TextStyle(
-                  color: active ? Colors.white : const Color(0xFF344966),
+                  color: enabled ? foreground : const Color(0xFF7A879C),
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1,
-                  fontSize: 15,
+                  fontSize: 14,
                 ),
               ),
             ],
@@ -401,44 +588,124 @@ class _QuickAction extends StatelessWidget {
 }
 
 class _RecentActivityCard extends StatelessWidget {
-  const _RecentActivityCard();
+  const _RecentActivityCard({required this.records});
+
+  final List<Map<String, dynamic>> records;
 
   @override
   Widget build(BuildContext context) {
+    final entries = _buildEntries(records).take(5).toList();
+
     return BaseCard(
       padding: EdgeInsets.zero,
-      child: Column(
-        children: const [
-          _RecentItem(
-            icon: Icons.login_rounded,
-            title: 'Clock In Successful',
-            subtitle: 'Office Location • Today',
-            time: '09:02 AM',
-            iconBg: Color(0xFFDEEFE7),
-            iconColor: Color(0xFF2E9D6D),
-          ),
-          Divider(height: 1, color: AppColors.cardBorder),
-          _RecentItem(
-            icon: Icons.logout_rounded,
-            title: 'Clock Out Successful',
-            subtitle: 'Remote • Yesterday',
-            time: '06:15 PM',
-            iconBg: Color(0xFFF0F2F6),
-            iconColor: Color(0xFF516683),
-          ),
-          Divider(height: 1, color: AppColors.cardBorder),
-          _RecentItem(
-            icon: Icons.login_rounded,
-            title: 'Clock In Successful',
-            subtitle: 'Remote • Yesterday',
-            time: '08:58 AM',
-            iconBg: Color(0xFFF0F2F6),
-            iconColor: Color(0xFF516683),
-          ),
-        ],
-      ),
+      child: entries.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'No recent activity yet.',
+                style: TextStyle(color: AppColors.muted, fontSize: 14),
+              ),
+            )
+          : Column(
+              children: List.generate(entries.length, (index) {
+                final entry = entries[index];
+                return Column(
+                  children: [
+                    _RecentItem(
+                      icon: entry.icon,
+                      title: entry.title,
+                      subtitle: entry.subtitle,
+                      time: DateFormat('hh:mm a').format(entry.time),
+                      iconBg: entry.iconBg,
+                      iconColor: entry.iconColor,
+                    ),
+                    if (index < entries.length - 1)
+                      const Divider(height: 1, color: AppColors.cardBorder),
+                  ],
+                );
+              }),
+            ),
     );
   }
+
+  List<_ActivityEntry> _buildEntries(List<Map<String, dynamic>> raw) {
+    final out = <_ActivityEntry>[];
+    for (final row in raw) {
+      final date = _friendlyDate((row['date'] as String?) ?? '');
+      final clockIn = row['clockIn'];
+      final clockOut = row['clockOut'];
+
+      if (clockIn is Timestamp) {
+        out.add(
+          _ActivityEntry(
+            title: 'Clock In Successful',
+            subtitle: date,
+            time: clockIn.toDate(),
+            icon: Icons.login_rounded,
+            iconBg: const Color(0xFFDEEFE7),
+            iconColor: const Color(0xFF2E9D6D),
+          ),
+        );
+      }
+      if (clockOut is Timestamp) {
+        out.add(
+          _ActivityEntry(
+            title: 'Clock Out Successful',
+            subtitle: date,
+            time: clockOut.toDate(),
+            icon: Icons.logout_rounded,
+            iconBg: const Color(0xFFF0F2F6),
+            iconColor: const Color(0xFF516683),
+          ),
+        );
+      }
+    }
+
+    out.sort((a, b) => b.time.compareTo(a.time));
+    return out;
+  }
+
+  String _friendlyDate(String date) {
+    try {
+      return DateFormat('EEE, MMM d').format(DateTime.parse(date));
+    } catch (_) {
+      return date;
+    }
+  }
+}
+
+class _ActivityEntry {
+  const _ActivityEntry({
+    required this.title,
+    required this.subtitle,
+    required this.time,
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+  });
+
+  final String title;
+  final String subtitle;
+  final DateTime time;
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+}
+
+enum _ClockButtonState { clockIn, clockOut, done }
+
+class _QuickActionStyle {
+  const _QuickActionStyle({
+    required this.label,
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color background;
+  final Color foreground;
 }
 
 class _RecentItem extends StatelessWidget {

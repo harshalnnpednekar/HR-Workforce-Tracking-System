@@ -12,6 +12,81 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class LeaveService {
   static final _db = FirebaseFirestore.instance;
 
+  // ── Employee Leave V2 (`leaves`) ────────────────────────
+
+  /// Returns remaining balances from `users/{uid}`.
+  static Future<Map<String, int>> getUserLeaveBalances(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+    final data = doc.data() ?? <String, dynamic>{};
+    return {
+      'casual':
+          (data['casualLeaveBalance'] as num?)?.toInt() ??
+          (data['casualLeave'] as num?)?.toInt() ??
+          0,
+      'sick':
+          (data['sickLeaveBalance'] as num?)?.toInt() ??
+          (data['sickLeave'] as num?)?.toInt() ??
+          0,
+      'earned':
+          (data['earnedLeaveBalance'] as num?)?.toInt() ??
+          (data['earnedLeave'] as num?)?.toInt() ??
+          0,
+    };
+  }
+
+  /// Submits a leave request into `leaves` collection.
+  static Future<String> submitLeave({
+    required String uid,
+    required String leaveType,
+    required DateTime fromDate,
+    required DateTime toDate,
+    required int totalDays,
+    required String reason,
+  }) async {
+    final ref = await _db.collection('leaves').add({
+      'uid': uid,
+      'leaveType': leaveType,
+      'fromDate': Timestamp.fromDate(fromDate),
+      'toDate': Timestamp.fromDate(toDate),
+      'totalDays': totalDays,
+      'reason': reason,
+      'status': 'pending',
+      'appliedOn': FieldValue.serverTimestamp(),
+      'reviewedBy': null,
+    });
+    return ref.id;
+  }
+
+  /// Streams employee's leave history in descending applied date order.
+  static Stream<List<Map<String, dynamic>>> streamMyLeaves(String uid) {
+    return _db
+        .collection('leaves')
+        .where('uid', isEqualTo: uid)
+        .orderBy('appliedOn', descending: true)
+        .snapshots()
+        .map((snap) {
+          return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+        });
+  }
+
+  /// Returns approved leave count for a user in a given calendar month.
+  static Future<int> getApprovedLeaveCountForMonth(
+    String uid,
+    DateTime month,
+  ) async {
+    final start = DateTime(month.year, month.month, 1);
+    final end = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    final snap = await _db
+        .collection('leaves')
+        .where('uid', isEqualTo: uid)
+        .where('status', isEqualTo: 'approved')
+        .where('fromDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('fromDate', isLessThanOrEqualTo: Timestamp.fromDate(end))
+        .count()
+        .get();
+    return snap.count ?? 0;
+  }
+
   // ── Leave Types ──────────────────────────────────────────
 
   /// Returns all active leave types.

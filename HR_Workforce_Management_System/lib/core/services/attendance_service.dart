@@ -1,88 +1,187 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Firestore collection: `attendance`
+/// Firestore collection shape:
+///   attendance/{uid}/records/{yyyy-MM-dd}
 ///
-/// Document fields:
-///   userId, date (YYYY-MM-DD), punchIn (Timestamp), punchOut (Timestamp?),
-///   totalHours (double), isLate (bool), lateMinutes (int),
-///   isHalfDay (bool), status ('present'|'absent'|'half-day')
+/// Record fields:
+///   date (String), clockIn (Timestamp?), clockOut (Timestamp?),
+///   totalHours (double), status ('present'|'late'|'done')
 class AttendanceService {
   static final _db = FirebaseFirestore.instance;
-  static const _col = 'attendance';
+  static const _rootCol = 'attendance';
 
-  /// Punch-in for today. Returns the new document ID.
-  static Future<String> punchIn(String userId) async {
-    final today = _today();
-    // Prevent duplicate punch-in
-    final existing = await _db
-        .collection(_col)
-        .where('userId', isEqualTo: userId)
-        .where('date', isEqualTo: today)
-        .limit(1)
-        .get();
-    if (existing.docs.isNotEmpty) {
-      throw Exception('Already punched in today.');
-    }
-
-    final ref = await _db.collection(_col).add({
-      'userId': userId,
-      'date': today,
-      'punchIn': FieldValue.serverTimestamp(),
-      'punchOut': null,
-      'totalHours': 0.0,
-      'isLate': false,
-      'lateMinutes': 0,
-      'isHalfDay': false,
-      'status': 'present',
-    });
-    return ref.id;
+  static CollectionReference<Map<String, dynamic>> _records(String userId) {
+    return _db.collection(_rootCol).doc(userId).collection('records');
   }
 
-  /// Punch-out for today, calculates total hours and applies late/half-day rules.
-  static Future<void> punchOut(String userId) async {
-    final today = _today();
-    final snap = await _db
-        .collection(_col)
-        .where('userId', isEqualTo: userId)
-        .where('date', isEqualTo: today)
-        .limit(1)
-        .get();
-    if (snap.docs.isEmpty) throw Exception('No punch-in found for today.');
+  static DocumentReference<Map<String, dynamic>> _recordRef(
+    String userId,
+    DateTime date,
+  ) {
+    return _records(userId).doc(_dateKey(date));
+  }
 
-    final doc = snap.docs.first;
-    final punchIn = (doc['punchIn'] as Timestamp).toDate();
-    final punchOut = DateTime.now();
-    final totalHours = punchOut.difference(punchIn).inMinutes / 60.0;
-
-    // Fetch HR rules for half-day threshold
-    final rulesSnap = await _db
-        .collection('hrRules')
-        .doc('halfday_threshold_hours')
-        .get();
-    final halfDayThreshold =
-        double.tryParse(rulesSnap.data()?['value'] ?? '4') ?? 4.0;
-
-    final isHalfDay = totalHours < halfDayThreshold;
-    final status = isHalfDay ? 'half-day' : 'present';
-
-    await doc.reference.update({
-      'punchOut': FieldValue.serverTimestamp(),
-      'totalHours': double.parse(totalHours.toStringAsFixed(2)),
-      'isHalfDay': isHalfDay,
-      'status': status,
+  /// Streams today's attendance record for [userId].
+  static Stream<Map<String, dynamic>?> streamTodayAttendance(String userId) {
+    return _recordRef(userId, DateTime.now()).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return {'id': doc.id, ...doc.data()!};
     });
   }
 
-  /// Returns today's attendance record for [userId], or null if not punched in.
+  /// Returns today's attendance record for [userId], or null if absent.
   static Future<Map<String, dynamic>?> getTodayAttendance(String userId) async {
-    final snap = await _db
-        .collection(_col)
-        .where('userId', isEqualTo: userId)
-        .where('date', isEqualTo: _today())
-        .limit(1)
+    final doc = await _recordRef(userId, DateTime.now()).get();
+    if (!doc.exists) return null;
+    return {'id': doc.id, ...doc.data()!};
+  }
+
+  /// Returns attendance record for [date] and [userId], or null when absent.
+  static Future<Map<String, dynamic>?> getAttendanceForDate(
+    String userId,
+    DateTime date,
+  ) async {
+    final doc = await _recordRef(userId, date).get();
+    if (!doc.exists) return null;
+    return {'id': doc.id, ...doc.data()!};
+  }
+
+  /// Writes today's clock-in and returns the local captured timestamp.
+  static Future<DateTime> clockIn(String userId) async {
+    final now = DateTime.now();
+    final ref = _recordRef(userId, now);
+    final isLate = await _isLateClockIn(now);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (snap.exists) {
+        final data = snap.data() ?? {};
+        final hasClockIn = data['clockIn'] != null;
+        final hasClockOut = data['clockOut'] != null;
+        if (hasClockOut) {
+          throw Exception('Attendance already completed for today.');
+        }
+        if (hasClockIn) {
+          throw Exception('Already clocked in for today.');
+        }
+      }
+
+      tx.set(ref, {
+        'date': _dateKey(now),
+        'clockIn': Timestamp.fromDate(now),
+        'clockOut': null,
+        'totalHours': 0.0,
+        'status': isLate ? 'late' : 'present',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+
+    return now;
+  }
+
+  /// Writes today's clock-out and returns the local captured timestamp.
+  static Future<DateTime> clockOut(String userId) async {
+    final now = DateTime.now();
+    final ref = _recordRef(userId, now);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (!snap.exists) {
+        throw Exception('No clock-in found for today.');
+      }
+
+      final data = snap.data() ?? {};
+      final clockInRaw = data['clockIn'];
+      if (clockInRaw == null) {
+        throw Exception('No clock-in found for today.');
+      }
+      if (data['clockOut'] != null) {
+        throw Exception('Already clocked out for today.');
+      }
+
+      final clockIn = (clockInRaw as Timestamp).toDate();
+      final totalHours = now.difference(clockIn).inMinutes / 60.0;
+
+      tx.set(ref, {
+        'clockOut': Timestamp.fromDate(now),
+        'totalHours': double.parse(totalHours.toStringAsFixed(2)),
+        'status': data['status'] == 'late' ? 'late' : 'done',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+
+    return now;
+  }
+
+  /// Returns total hours for the trailing 7 days (including today).
+  static Future<double> getWeeklyHours(String userId) async {
+    final now = DateTime.now();
+    final start = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 6));
+    final snap = await _records(userId)
+        .where('date', isGreaterThanOrEqualTo: _dateKey(start))
+        .where('date', isLessThanOrEqualTo: _dateKey(now))
         .get();
-    if (snap.docs.isEmpty) return null;
-    return {'id': snap.docs.first.id, ...snap.docs.first.data()};
+
+    double sum = 0;
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final value = data['totalHours'];
+      if (value is num) {
+        sum += value.toDouble();
+      }
+    }
+    return double.parse(sum.toStringAsFixed(2));
+  }
+
+  /// Returns late mark count for the current month.
+  static Future<int> getMonthlyLateMarks(String userId) async {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final monthEnd = DateTime(now.year, now.month + 1, 0);
+    final snap = await _records(userId)
+        .where('status', isEqualTo: 'late')
+        .where('date', isGreaterThanOrEqualTo: _dateKey(monthStart))
+        .where('date', isLessThanOrEqualTo: _dateKey(monthEnd))
+        .get();
+    return snap.docs.length;
+  }
+
+  /// Streams latest attendance records ordered by date descending.
+  static Stream<List<Map<String, dynamic>>> streamRecentRecords(
+    String userId, {
+    int limit = 5,
+  }) {
+    return _records(
+      userId,
+    ).orderBy('date', descending: true).limit(limit).snapshots().map((snap) {
+      return snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+    });
+  }
+
+  /// Streams records for a Monday-Sunday week containing [anchorDate].
+  static Stream<List<Map<String, dynamic>>> streamWeekRecords(
+    String userId,
+    DateTime anchorDate,
+  ) {
+    final start = _startOfWeek(anchorDate);
+    final end = start.add(const Duration(days: 6));
+    return _records(userId)
+        .where('date', isGreaterThanOrEqualTo: _dateKey(start))
+        .where('date', isLessThanOrEqualTo: _dateKey(end))
+        .snapshots()
+        .map((snap) {
+          final rows = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+          rows.sort((a, b) {
+            final ad = (a['date'] as String?) ?? '';
+            final bd = (b['date'] as String?) ?? '';
+            return ad.compareTo(bd);
+          });
+          return rows;
+        });
   }
 
   /// Returns attendance records for [userId] in a given [month] (YYYY-MM).
@@ -90,29 +189,59 @@ class AttendanceService {
     String userId,
     String month,
   ) async {
-    final snap = await _db
-        .collection(_col)
-        .where('userId', isEqualTo: userId)
+    final snap = await _records(userId)
         .where('date', isGreaterThanOrEqualTo: '$month-01')
         .where('date', isLessThanOrEqualTo: '$month-31')
-        .orderBy('date')``
+        .orderBy('date')
         .get();
     return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
   }
 
-  /// Admin: returns all attendance for a given date.
+  /// Admin helper: returns all user IDs with attendance for a date.
   static Future<List<Map<String, dynamic>>> getAttendanceByDate(
     String date,
   ) async {
-    final snap = await _db
-        .collection(_col)
+    final parentSnap = await _db
+        .collectionGroup('records')
         .where('date', isEqualTo: date)
         .get();
-    return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    return parentSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
   }
 
-  static String _today() {
-    final now = DateTime.now();
+  static Future<bool> _isLateClockIn(DateTime clockIn) async {
+    final officeInSnap = await _db
+        .collection('hrRules')
+        .doc('office_intime')
+        .get();
+    final graceSnap = await _db
+        .collection('hrRules')
+        .doc('late_threshold_minutes')
+        .get();
+
+    final officeIn = (officeInSnap.data()?['value'] as String?) ?? '09:30';
+    final graceMinutes =
+        int.tryParse((graceSnap.data()?['value'] as String?) ?? '15') ?? 15;
+
+    final split = officeIn.split(':');
+    final h = split.isNotEmpty ? int.tryParse(split[0]) ?? 9 : 9;
+    final m = split.length > 1 ? int.tryParse(split[1]) ?? 30 : 30;
+    final expected = DateTime(
+      clockIn.year,
+      clockIn.month,
+      clockIn.day,
+      h,
+      m,
+    ).add(Duration(minutes: graceMinutes));
+
+    return clockIn.isAfter(expected);
+  }
+
+  static String _dateKey(DateTime now) {
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  static DateTime _startOfWeek(DateTime date) {
+    final base = DateTime(date.year, date.month, date.day);
+    return base.subtract(Duration(days: base.weekday - DateTime.monday));
   }
 }

@@ -1,9 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../../../core/services/attendance_service.dart';
 import 'shared/employee_dashboard_constants.dart';
 
-class EmployeeAttendancePage extends StatelessWidget {
-  const EmployeeAttendancePage();
+class EmployeeAttendancePage extends StatefulWidget {
+  const EmployeeAttendancePage({super.key, required this.userId});
+
+  final String userId;
+
+  @override
+  State<EmployeeAttendancePage> createState() => _EmployeeAttendancePageState();
+}
+
+class _EmployeeAttendancePageState extends State<EmployeeAttendancePage> {
+  late DateTime _focusedMonth;
+  late DateTime _selectedDate;
+  late Future<List<Map<String, dynamic>>> _monthRecordsFuture;
+  late Future<Map<String, dynamic>?> _selectedRecordFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _focusedMonth = DateTime(now.year, now.month, 1);
+    _selectedDate = DateTime(now.year, now.month, now.day);
+    _loadRecords();
+  }
+
+  @override
+  void didUpdateWidget(covariant EmployeeAttendancePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      _loadRecords();
+    }
+  }
+
+  void _loadRecords() {
+    if (widget.userId.isEmpty) {
+      _monthRecordsFuture = Future.value(const []);
+      _selectedRecordFuture = Future.value(null);
+      return;
+    }
+
+    final month = DateFormat('yyyy-MM').format(_focusedMonth);
+    _monthRecordsFuture = AttendanceService.getMonthlyAttendance(
+      widget.userId,
+      month,
+    );
+    _selectedRecordFuture = AttendanceService.getAttendanceForDate(
+      widget.userId,
+      _selectedDate,
+    );
+  }
+
+  void _changeMonth(int delta) {
+    final moved = DateTime(_focusedMonth.year, _focusedMonth.month + delta, 1);
+    setState(() {
+      _focusedMonth = moved;
+      _selectedDate = DateTime(moved.year, moved.month, 1);
+      _loadRecords();
+    });
+  }
+
+  void _selectDate(DateTime date) {
+    setState(() {
+      _selectedDate = DateTime(date.year, date.month, date.day);
+      _selectedRecordFuture = widget.userId.isEmpty
+          ? Future.value(null)
+          : AttendanceService.getAttendanceForDate(
+              widget.userId,
+              _selectedDate,
+            );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,12 +84,23 @@ class EmployeeAttendancePage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 10, 24, 108),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          InnerPageHeader(title: 'Attendance Tracking'),
-          SizedBox(height: 18),
-          _AttendanceCalendarCard(),
-          SizedBox(height: 24),
-          _DailyLogAndWeeklyCard(),
+        children: [
+          const InnerPageHeader(title: 'Attendance Tracking'),
+          const SizedBox(height: 18),
+          _AttendanceCalendarCard(
+            focusedMonth: _focusedMonth,
+            selectedDate: _selectedDate,
+            monthRecordsFuture: _monthRecordsFuture,
+            onPreviousMonth: () => _changeMonth(-1),
+            onNextMonth: () => _changeMonth(1),
+            onSelectDate: _selectDate,
+          ),
+          const SizedBox(height: 24),
+          _DailyLogAndWeeklyCard(
+            userId: widget.userId,
+            selectedDate: _selectedDate,
+            selectedRecordFuture: _selectedRecordFuture,
+          ),
         ],
       ),
     );
@@ -24,7 +108,21 @@ class EmployeeAttendancePage extends StatelessWidget {
 }
 
 class _AttendanceCalendarCard extends StatelessWidget {
-  const _AttendanceCalendarCard();
+  const _AttendanceCalendarCard({
+    required this.focusedMonth,
+    required this.selectedDate,
+    required this.monthRecordsFuture,
+    required this.onPreviousMonth,
+    required this.onNextMonth,
+    required this.onSelectDate,
+  });
+
+  final DateTime focusedMonth;
+  final DateTime selectedDate;
+  final Future<List<Map<String, dynamic>>> monthRecordsFuture;
+  final VoidCallback onPreviousMonth;
+  final VoidCallback onNextMonth;
+  final ValueChanged<DateTime> onSelectDate;
 
   @override
   Widget build(BuildContext context) {
@@ -35,11 +133,11 @@ class _AttendanceCalendarCard extends StatelessWidget {
             children: [
               _MonthNavButton(
                 icon: Icons.chevron_left_rounded,
-                onTap: () => showActionMessage(context, 'Previous month'),
+                onTap: onPreviousMonth,
               ),
               Expanded(
                 child: Text(
-                  'October 2023',
+                  DateFormat('MMMM y').format(focusedMonth),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     color: AppColors.title,
@@ -50,14 +148,29 @@ class _AttendanceCalendarCard extends StatelessWidget {
               ),
               _MonthNavButton(
                 icon: Icons.chevron_right_rounded,
-                onTap: () => showActionMessage(context, 'Next month'),
+                onTap: onNextMonth,
               ),
             ],
           ),
           const SizedBox(height: 16),
           const _CalendarWeekLabels(),
           const SizedBox(height: 10),
-          const _CalendarDays(),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: monthRecordsFuture,
+            builder: (context, snapshot) {
+              final statusByDate = {
+                for (final r
+                    in (snapshot.data ?? const <Map<String, dynamic>>[]))
+                  (r['date'] as String? ?? ''): (r['status'] as String? ?? ''),
+              };
+              return _CalendarDays(
+                focusedMonth: focusedMonth,
+                selectedDate: selectedDate,
+                statusByDate: statusByDate,
+                onSelectDate: onSelectDate,
+              );
+            },
+          ),
           const SizedBox(height: 16),
           const Divider(color: AppColors.cardBorder),
           const SizedBox(height: 10),
@@ -136,46 +249,68 @@ class _CalendarWeekLabels extends StatelessWidget {
 }
 
 class _CalendarDays extends StatelessWidget {
-  const _CalendarDays();
+  const _CalendarDays({
+    required this.focusedMonth,
+    required this.selectedDate,
+    required this.statusByDate,
+    required this.onSelectDate,
+  });
+
+  final DateTime focusedMonth;
+  final DateTime selectedDate;
+  final Map<String, String> statusByDate;
+  final ValueChanged<DateTime> onSelectDate;
 
   @override
   Widget build(BuildContext context) {
-    final days = [
-      _DayItem(day: '24', inactive: true),
-      _DayItem(day: '25', inactive: true),
-      _DayItem(day: '26', inactive: true),
-      _DayItem(day: '27', inactive: true),
-      _DayItem(day: '28', inactive: true),
-      _DayItem(day: '29', inactive: true),
-      _DayItem(day: '1', present: true),
-      _DayItem(day: '2', present: true),
-      _DayItem(day: '3', present: true),
-      _DayItem(day: '4', late: true),
-      _DayItem(day: '5', selected: true),
-      _DayItem(day: '6', absent: true),
-      _DayItem(day: '7', present: true),
-      _DayItem(day: '8'),
-      _DayItem(day: '9'),
-      _DayItem(day: '10'),
-      _DayItem(day: '11'),
-      _DayItem(day: '12'),
-      _DayItem(day: '13'),
-      _DayItem(day: '14'),
-      _DayItem(day: '15'),
-    ];
+    final monthFirst = DateTime(focusedMonth.year, focusedMonth.month, 1);
+    final monthDays = DateTime(
+      focusedMonth.year,
+      focusedMonth.month + 1,
+      0,
+    ).day;
+    final lead = monthFirst.weekday % 7;
+    final total = (((lead + monthDays) / 7).ceil()) * 7;
+
+    final cells = List<Widget>.generate(total, (index) {
+      final dayNumber = index - lead + 1;
+      if (dayNumber < 1 || dayNumber > monthDays) {
+        return const SizedBox.shrink();
+      }
+
+      final date = DateTime(focusedMonth.year, focusedMonth.month, dayNumber);
+      final key = DateFormat('yyyy-MM-dd').format(date);
+      final status = statusByDate[key];
+
+      return InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () => onSelectDate(date),
+        child: _DayItem(
+          day: '$dayNumber',
+          selected: _isSameDate(date, selectedDate),
+          present: status == 'present',
+          late: status == 'late',
+          absent: status == 'absent',
+        ),
+      );
+    });
 
     return Wrap(
       spacing: 2,
       runSpacing: 8,
-      children: days
+      children: cells
           .map(
-            (item) => SizedBox(
+            (cell) => SizedBox(
               width: (MediaQuery.of(context).size.width - 102) / 7,
-              child: item,
+              child: cell,
             ),
           )
           .toList(),
     );
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }
 
@@ -186,7 +321,6 @@ class _DayItem extends StatelessWidget {
     this.late = false,
     this.absent = false,
     this.selected = false,
-    this.inactive = false,
   });
 
   final String day;
@@ -194,7 +328,6 @@ class _DayItem extends StatelessWidget {
   final bool late;
   final bool absent;
   final bool selected;
-  final bool inactive;
 
   @override
   Widget build(BuildContext context) {
@@ -202,9 +335,6 @@ class _DayItem extends StatelessWidget {
     Color borderColor = Colors.transparent;
     Color bg = Colors.transparent;
 
-    if (inactive) {
-      textColor = const Color(0xFFC8D0DD);
-    }
     if (present) {
       borderColor = const Color(0xFF9CE1CA);
       bg = const Color(0xFFEAF9F3);
@@ -224,33 +354,60 @@ class _DayItem extends StatelessWidget {
       textColor = Colors.white;
     }
 
+    final dotColor = present
+        ? const Color(0xFF18B47F)
+        : late
+        ? const Color(0xFFF59F00)
+        : absent
+        ? const Color(0xFFF14564)
+        : null;
+
     return Center(
-      child: Container(
+      child: SizedBox(
         width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-          border: Border.all(color: borderColor),
-          boxShadow: selected
-              ? const [
-                  BoxShadow(
-                    color: Color(0x2EF48300),
-                    blurRadius: 15,
-                    offset: Offset(0, 8),
+        height: 46,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: bg,
+                shape: BoxShape.circle,
+                border: Border.all(color: borderColor),
+                boxShadow: selected
+                    ? const [
+                        BoxShadow(
+                          color: Color(0x2EF48300),
+                          blurRadius: 15,
+                          offset: Offset(0, 8),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Center(
+                child: Text(
+                  day,
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
                   ),
-                ]
-              : null,
-        ),
-        child: Center(
-          child: Text(
-            day,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+                ),
+              ),
             ),
-          ),
+            const SizedBox(height: 2),
+            if (dotColor != null)
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -258,10 +415,20 @@ class _DayItem extends StatelessWidget {
 }
 
 class _DailyLogAndWeeklyCard extends StatelessWidget {
-  const _DailyLogAndWeeklyCard();
+  const _DailyLogAndWeeklyCard({
+    required this.userId,
+    required this.selectedDate,
+    required this.selectedRecordFuture,
+  });
+
+  final String userId;
+  final DateTime selectedDate;
+  final Future<Map<String, dynamic>?> selectedRecordFuture;
 
   @override
   Widget build(BuildContext context) {
+    final selectedDateLabel = DateFormat('MMM d, y').format(selectedDate);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -270,7 +437,7 @@ class _DailyLogAndWeeklyCard extends StatelessWidget {
             const Icon(Icons.event_available_rounded, color: AppColors.primary),
             const SizedBox(width: 8),
             Text(
-              'Daily Log - Oct 5, 2023',
+              'Daily Log - $selectedDateLabel',
               style: GoogleFonts.outfit(
                 color: AppColors.title,
                 fontWeight: FontWeight.w700,
@@ -280,30 +447,40 @@ class _DailyLogAndWeeklyCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        const Row(
-          children: [
-            Expanded(
-              child: _AttendanceInfoBox(
-                title: 'FIRST LOGIN',
-                value: '08:45 AM',
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: _AttendanceInfoBox(
-                title: 'LAST LOGOUT',
-                value: '06:15 PM',
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: _AttendanceInfoBox(
-                title: 'EFFECTIVE',
-                value: '8h 30m',
-                highlighted: true,
-              ),
-            ),
-          ],
+        FutureBuilder<Map<String, dynamic>?>(
+          future: selectedRecordFuture,
+          builder: (context, snapshot) {
+            final record = snapshot.data;
+            final clockIn = _readTimestamp(record?['clockIn']);
+            final clockOut = _readTimestamp(record?['clockOut']);
+            final totalHours = _recordHours(record, clockIn, clockOut);
+
+            return Row(
+              children: [
+                Expanded(
+                  child: _AttendanceInfoBox(
+                    title: 'FIRST LOGIN',
+                    value: _formatTime(clockIn),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _AttendanceInfoBox(
+                    title: 'LAST LOGOUT',
+                    value: _formatTime(clockOut),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _AttendanceInfoBox(
+                    title: 'EFFECTIVE',
+                    value: _formatHours(totalHours),
+                    highlighted: true,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 16),
         BaseCard(
@@ -341,20 +518,43 @@ class _DailyLogAndWeeklyCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Avg: 7h 45m / day',
-                  style: TextStyle(color: AppColors.muted, fontSize: 12),
-                ),
-              ),
+              _WeeklyAverageLabel(userId: userId, anchorDate: selectedDate),
               const SizedBox(height: 14),
-              const _WeekBarChart(),
+              _WeekBarChart(userId: userId, anchorDate: selectedDate),
             ],
           ),
         ),
       ],
     );
+  }
+
+  static DateTime? _readTimestamp(Object? raw) {
+    return raw is Timestamp ? raw.toDate() : null;
+  }
+
+  static double _recordHours(
+    Map<String, dynamic>? record,
+    DateTime? inTime,
+    DateTime? outTime,
+  ) {
+    final raw = record?['totalHours'];
+    if (raw is num) return raw.toDouble();
+    if (inTime != null && outTime != null) {
+      return outTime.difference(inTime).inMinutes / 60.0;
+    }
+    return 0;
+  }
+
+  static String _formatTime(DateTime? value) {
+    if (value == null) return '--';
+    return DateFormat('hh:mm a').format(value);
+  }
+
+  static String _formatHours(double totalHours) {
+    if (totalHours <= 0) return '--';
+    final h = totalHours.floor();
+    final m = ((totalHours - h) * 60).round();
+    return '${h}h ${m}m';
   }
 }
 
@@ -399,62 +599,173 @@ class _AttendanceInfoBox extends StatelessWidget {
 }
 
 class _WeekBarChart extends StatelessWidget {
-  const _WeekBarChart();
+  const _WeekBarChart({required this.userId, required this.anchorDate});
+
+  final String userId;
+  final DateTime anchorDate;
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      ('MON', 0.78),
-      ('TUE', 0.92),
-      ('WED', 0.85),
-      ('THU', 0.86),
-      ('FRI', 0.64),
-      ('SAT', 0.14),
-      ('SUN', 0.12),
-    ];
-    return SizedBox(
-      height: 208,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: items.map((e) {
-          final active = e.$1 == 'WED';
-          return Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(
-                  width: 34,
-                  height: 130 * e.$2,
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.primary : const Color(0xFFECC18B),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.topCenter,
-                  padding: const EdgeInsets.only(top: 6),
-                  child: active
-                      ? const Text(
-                          '8.5h',
+    if (userId.isEmpty) {
+      return const SizedBox(height: 208);
+    }
+
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: AttendanceService.streamWeekRecords(userId, anchorDate),
+      builder: (context, snapshot) {
+        final week = _weekStart(anchorDate);
+        final dayHours = List<double>.filled(7, 0);
+        for (final row in (snapshot.data ?? const <Map<String, dynamic>>[])) {
+          final dateRaw = row['date'] as String?;
+          final parsed = dateRaw == null ? null : DateTime.tryParse(dateRaw);
+          if (parsed == null) continue;
+          final index = parsed.difference(week).inDays;
+          if (index < 0 || index > 6) continue;
+          final val = row['totalHours'];
+          dayHours[index] = val is num ? val.toDouble() : 0;
+        }
+
+        final maxValue = dayHours.fold<double>(0, (p, e) => e > p ? e : p);
+        final maxY = maxValue < 8 ? 8.0 : maxValue + 1.5;
+        final today = DateTime.now();
+
+        return SizedBox(
+          height: 208,
+          child: BarChart(
+            BarChartData(
+              minY: 0,
+              maxY: maxY,
+              barTouchData: BarTouchData(enabled: true),
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              titlesData: FlTitlesData(
+                leftTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                rightTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                topTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      const labels = [
+                        'MON',
+                        'TUE',
+                        'WED',
+                        'THU',
+                        'FRI',
+                        'SAT',
+                        'SUN',
+                      ];
+                      final idx = value.toInt();
+                      if (idx < 0 || idx >= labels.length) {
+                        return const SizedBox.shrink();
+                      }
+                      final date = week.add(Duration(days: idx));
+                      final isToday = _isSameDate(date, today);
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          labels[idx],
                           style: TextStyle(
-                            color: Colors.white,
+                            color: isToday
+                                ? AppColors.primary
+                                : const Color(0xFF93A0B6),
                             fontWeight: FontWeight.w700,
-                            fontSize: 11,
                           ),
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  e.$1,
-                  style: TextStyle(
-                    color: active ? AppColors.primary : const Color(0xFF93A0B6),
-                    fontWeight: FontWeight.w700,
+                        ),
+                      );
+                    },
                   ),
                 ),
-              ],
+              ),
+              barGroups: List.generate(7, (index) {
+                final date = week.add(Duration(days: index));
+                final isToday = _isSameDate(date, today);
+                return BarChartGroupData(
+                  x: index,
+                  barRods: [
+                    BarChartRodData(
+                      toY: dayHours[index],
+                      width: 20,
+                      borderRadius: BorderRadius.circular(10),
+                      color: isToday
+                          ? AppColors.primary
+                          : const Color(0xFFECC18B),
+                    ),
+                  ],
+                );
+              }),
             ),
-          );
-        }).toList(),
-      ),
+          ),
+        );
+      },
     );
+  }
+
+  static DateTime _weekStart(DateTime date) {
+    final base = DateTime(date.year, date.month, date.day);
+    return base.subtract(Duration(days: base.weekday - DateTime.monday));
+  }
+
+  static bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _WeeklyAverageLabel extends StatelessWidget {
+  const _WeeklyAverageLabel({required this.userId, required this.anchorDate});
+
+  final String userId;
+  final DateTime anchorDate;
+
+  @override
+  Widget build(BuildContext context) {
+    if (userId.isEmpty) {
+      return const Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Avg: --',
+          style: TextStyle(color: AppColors.muted, fontSize: 12),
+        ),
+      );
+    }
+
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: AttendanceService.streamWeekRecords(userId, anchorDate),
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+        double sum = 0;
+        int daysWorked = 0;
+        for (final row in rows) {
+          final h = row['totalHours'];
+          final value = h is num ? h.toDouble() : 0.0;
+          if (value > 0) {
+            sum += value;
+            daysWorked++;
+          }
+        }
+        final avg = daysWorked == 0 ? 0.0 : sum / daysWorked;
+        final avgLabel = daysWorked == 0 ? '--' : _formatHours(avg);
+
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Avg: $avgLabel / day',
+            style: const TextStyle(color: AppColors.muted, fontSize: 12),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _formatHours(double totalHours) {
+    final h = totalHours.floor();
+    final m = ((totalHours - h) * 60).round();
+    return '${h}h ${m}m';
   }
 }

@@ -53,6 +53,17 @@ class TaskService {
     return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
   }
 
+  /// Returns count of completed tasks assigned to [userId].
+  static Future<int> getCompletedTaskCount(String userId) async {
+    final snap = await _db
+        .collection('tasks')
+        .where('assignedTo', isEqualTo: userId)
+        .where('status', isEqualTo: 'completed')
+        .count()
+        .get();
+    return snap.count ?? 0;
+  }
+
   /// Admin: returns all tasks.
   static Future<List<Map<String, dynamic>>> getAllTasks() async {
     final snap = await _db

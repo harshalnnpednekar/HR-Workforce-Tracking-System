@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../auth/presentation/controllers/auth_controller.dart';
@@ -37,6 +38,14 @@ class _EmployeeDashboardScreenState
     });
   }
 
+  void _goToLeaves() {
+    _onItemTapped(2);
+  }
+
+  void _goToPayroll() {
+    _onItemTapped(3);
+  }
+
   Future<void> _handleLogout() async {
     await ref.read(authControllerProvider.notifier).logout();
     if (!mounted) {
@@ -49,6 +58,8 @@ class _EmployeeDashboardScreenState
   Widget build(BuildContext context) {
     final currentUser = ref.watch(authControllerProvider).user;
     final userName = currentUser?.name ?? 'Alex';
+    final userId =
+        currentUser?.id ?? FirebaseAuth.instance.currentUser?.uid ?? '';
     final trimmedUserName = userName.trim();
     final firstName = trimmedUserName.isEmpty
         ? 'Alex'
@@ -60,13 +71,20 @@ class _EmployeeDashboardScreenState
         child: IndexedStack(
           index: _selectedIndex,
           children: [
-            EmployeeHomePage(name: firstName),
-            const EmployeeAttendancePage(),
-            const EmployeeLeavesPage(),
-            const EmployeePayrollPage(),
+            EmployeeHomePage(
+              name: firstName,
+              userId: userId,
+              onOpenLeaves: _goToLeaves,
+              onOpenPayroll: _goToPayroll,
+            ),
+            EmployeeAttendancePage(userId: userId),
+            EmployeeLeavesPage(userId: userId),
+            EmployeePayrollPage(userId: userId),
             EmployeeProfilePage(
+              userId: userId,
               fullName: trimmedUserName.isEmpty ? 'Alex' : trimmedUserName,
               onLogoutRequested: _handleLogout,
+              onOpenPayroll: _goToPayroll,
             ),
           ],
         ),

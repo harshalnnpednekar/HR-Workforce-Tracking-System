@@ -5,6 +5,7 @@ import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../widgets/admin_navigation.dart';
 import '../widgets/admin_navigation_drawer.dart';
 import '../widgets/admin_ui_kit.dart';
+import 'admin_profile_screen.dart';
 import 'admin_employees_screen.dart';
 import 'admin_home_screen.dart';
 import 'admin_hr_policy_screen.dart';
@@ -50,6 +51,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             _AdminTopBar(
               userName: userName,
               onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+              onProfileTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AdminProfileScreen()),
+                );
+              },
             ),
             Expanded(
               child: AnimatedSwitcher(
@@ -85,10 +91,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 }
 
 class _AdminTopBar extends StatelessWidget {
-  const _AdminTopBar({required this.userName, required this.onMenuTap});
+  const _AdminTopBar({
+    required this.userName,
+    required this.onMenuTap,
+    required this.onProfileTap,
+  });
 
   final String userName;
   final VoidCallback onMenuTap;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -158,19 +169,23 @@ class _AdminTopBar extends StatelessWidget {
             ],
           ),
           const SizedBox(width: 10),
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFE6D9),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              initials.isEmpty ? 'HR' : initials,
-              style: const TextStyle(
-                color: AdminColors.text,
-                fontWeight: FontWeight.w800,
+          InkWell(
+            onTap: onProfileTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE6D9),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initials.isEmpty ? 'HR' : initials,
+                style: const TextStyle(
+                  color: AdminColors.text,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
