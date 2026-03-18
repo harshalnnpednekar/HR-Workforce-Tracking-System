@@ -1,1 +1,28 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"equitec-hr-appf","appId":"1:649037154455:android:c137192f344c6677fdc1d2","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"equitec-hr-appf","configurations":{"android":"1:649037154455:android:c137192f344c6677fdc1d2","ios":"1:649037154455:ios:5bce8f63f0b4d3d6fdc1d2","macos":"1:649037154455:ios:5bce8f63f0b4d3d6fdc1d2","web":"1:649037154455:web:6d5f9ba17d3a9777fdc1d2","windows":"1:649037154455:web:ba4c0244248d6a60fdc1d2"}}}}}}
+{
+	"functions": {
+		"source": "functions"
+	},
+	"flutter": {
+		"platforms": {
+			"android": {
+				"default": {
+					"projectId": "equitec-hr-appf",
+					"appId": "1:649037154455:android:c137192f344c6677fdc1d2",
+					"fileOutput": "android/app/google-services.json"
+				}
+			},
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "equitec-hr-appf",
+					"configurations": {
+						"android": "1:649037154455:android:c137192f344c6677fdc1d2",
+						"ios": "1:649037154455:ios:5bce8f63f0b4d3d6fdc1d2",
+						"macos": "1:649037154455:ios:5bce8f63f0b4d3d6fdc1d2",
+						"web": "1:649037154455:web:6d5f9ba17d3a9777fdc1d2",
+						"windows": "1:649037154455:web:ba4c0244248d6a60fdc1d2"
+					}
+				}
+			}
+		}
+	}
+}

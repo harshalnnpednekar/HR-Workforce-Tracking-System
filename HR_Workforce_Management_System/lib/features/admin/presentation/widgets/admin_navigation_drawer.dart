@@ -17,6 +17,7 @@ class AdminNavigationDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final drawerSections = [
       AdminSection.dashboard,
+      AdminSection.attendance,
       AdminSection.employees,
       AdminSection.leaves,
       AdminSection.payroll,

@@ -309,21 +309,21 @@ class _LeaveRequestCardState extends State<_LeaveRequestCard> {
       return;
     }
 
-    final totalDays = _toDate!.difference(_fromDate!).inDays + 1;
-    final balances = await widget.balancesFuture;
-    if (!mounted) return;
-    final available = balances[_leaveType!] ?? 0;
-
-    if (totalDays > available) {
-      showActionMessage(context, 'Insufficient $_leaveType leave balance.');
-      return;
-    }
-
-    setState(() {
-      _submitting = true;
-    });
-
     try {
+      final totalDays = _toDate!.difference(_fromDate!).inDays + 1;
+      final balances = await widget.balancesFuture;
+      if (!mounted) return;
+      final available = balances[_leaveType!] ?? 0;
+
+      if (totalDays > available) {
+        showActionMessage(context, 'Insufficient $_leaveType leave balance.');
+        return;
+      }
+
+      setState(() {
+        _submitting = true;
+      });
+
       await LeaveService.submitLeave(
         uid: widget.userId,
         leaveType: _leaveType!,
@@ -557,6 +557,26 @@ class _LeaveHistorySection extends StatelessWidget {
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: LeaveService.streamMyLeaves(userId),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const BaseCard(
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline_rounded, color: AppColors.muted),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Unable to load leave history. Please refresh.',
+                          style: TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               final items = snapshot.data ?? const <Map<String, dynamic>>[];
               if (items.isEmpty) {
                 return const _EmptyLeaveHistory();

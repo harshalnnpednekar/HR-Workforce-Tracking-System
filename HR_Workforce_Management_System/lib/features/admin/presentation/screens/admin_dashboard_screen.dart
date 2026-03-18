@@ -7,6 +7,7 @@ import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../widgets/admin_navigation.dart';
 import '../widgets/admin_navigation_drawer.dart';
 import '../widgets/admin_ui_kit.dart';
+import 'admin_attendance_screen.dart';
 import 'admin_employees_screen.dart';
 import 'admin_home_screen.dart';
 import 'admin_hr_policy_screen.dart';
@@ -84,6 +85,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       AdminSection.dashboard => AdminHomeScreen(
         onSectionSelected: _selectSection,
       ),
+      AdminSection.attendance => const AdminAttendanceScreen(),
       AdminSection.employees => const AdminEmployeesScreen(),
       AdminSection.leaves => const AdminLeaveManagementScreen(),
       AdminSection.payroll => const AdminPayrollScreen(),
@@ -153,10 +155,8 @@ class _AdminTopBar extends StatelessWidget {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => NotificationsScreen(
-                        userId: userId,
-                        isAdmin: true,
-                      ),
+                      builder: (_) =>
+                          NotificationsScreen(userId: userId, isAdmin: true),
                     ),
                   );
                 },
@@ -185,16 +185,11 @@ class _AdminTopBar extends StatelessWidget {
                             minWidth: 18,
                             minHeight: 18,
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFF4D1A),
                             borderRadius: BorderRadius.circular(99),
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 1.8,
-                            ),
+                            border: Border.all(color: Colors.white, width: 1.8),
                           ),
                           alignment: Alignment.center,
                           child: Text(

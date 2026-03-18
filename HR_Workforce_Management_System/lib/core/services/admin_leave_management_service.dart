@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'notification_service.dart';
+
 class AdminLeaveManagementService {
   static final _db = FirebaseFirestore.instance;
 
@@ -15,16 +17,41 @@ class AdminLeaveManagementService {
     String status,
   ) {
     final normalized = status.toLowerCase();
-    final orderField = normalized == 'pending' ? 'appliedOn' : 'reviewedAt';
 
     return _db
         .collection('leaves')
         .where('status', isEqualTo: normalized)
-        .orderBy(orderField, descending: true)
         .snapshots()
         .map((snap) {
-          return snap.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+          final rows = snap.docs
+              .map((doc) => {'id': doc.id, ...doc.data()})
+              .toList();
+          rows.sort((a, b) {
+            final aTime = _readSortDate(a, normalized);
+            final bTime = _readSortDate(b, normalized);
+            return bTime.compareTo(aTime);
+          });
+          return rows;
         });
+  }
+
+  static DateTime _readSortDate(Map<String, dynamic> row, String status) {
+    if (status == 'pending') {
+      return _asDateTime(row['appliedOn']) ??
+          _asDateTime(row['fromDate']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return _asDateTime(row['reviewedAt']) ??
+        _asDateTime(row['appliedOn']) ??
+        _asDateTime(row['fromDate']) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  static DateTime? _asDateTime(dynamic raw) {
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is DateTime) return raw;
+    if (raw is String) return DateTime.tryParse(raw);
+    return null;
   }
 
   static Future<void> approveLeave({
@@ -59,11 +86,16 @@ class AdminLeaveManagementService {
     }
 
     batch.set(notifRef, {
+      'title': 'Leave Approved',
       'message':
           'Your ${_normalizeLeaveType(leaveType)} leave ($dateRangeLabel) was approved',
-      'type': 'leave',
+      'subtitle':
+          '$dateRangeLabel · $totalDays ${totalDays == 1 ? 'Day' : 'Days'}',
+      'type': NotificationService.typeLeaveApproved,
       'isRead': false,
       'createdAt': FieldValue.serverTimestamp(),
+      'relatedId': leaveId,
+      'leaveId': leaveId,
     });
 
     batch.set(activityRef, {
@@ -76,6 +108,11 @@ class AdminLeaveManagementService {
     });
 
     await batch.commit();
+
+    await _sendLowBalanceWarningIfNeeded(
+      employeeUid: employeeUid,
+      leaveType: leaveType,
+    );
   }
 
   static Future<void> rejectLeave({
@@ -104,11 +141,17 @@ class AdminLeaveManagementService {
     });
 
     batch.set(notifRef, {
+      'title': 'Leave Rejected',
       'message':
           'Your ${_normalizeLeaveType(leaveType)} leave ($dateRangeLabel) was rejected',
-      'type': 'leave',
+      'subtitle': rejectionReason.trim().isEmpty
+          ? 'Reason not provided'
+          : rejectionReason.trim(),
+      'type': NotificationService.typeLeaveRejected,
       'isRead': false,
       'createdAt': FieldValue.serverTimestamp(),
+      'relatedId': leaveId,
+      'leaveId': leaveId,
     });
 
     batch.set(activityRef, {
@@ -142,5 +185,32 @@ class AdminLeaveManagementService {
     final key = leaveType.trim();
     if (key.isEmpty) return 'leave';
     return '${key[0].toUpperCase()}${key.substring(1).toLowerCase()}';
+  }
+
+  static Future<void> _sendLowBalanceWarningIfNeeded({
+    required String employeeUid,
+    required String leaveType,
+  }) async {
+    final field = _balanceFieldForLeaveType(leaveType);
+    if (field == null) return;
+
+    final userDoc = await _db.collection('users').doc(employeeUid).get();
+    final remaining = (userDoc.data()?[field] as num?)?.toInt();
+    if (remaining == null || remaining > 2) {
+      return;
+    }
+
+    try {
+      await NotificationService.send(
+        userId: employeeUid,
+        title: 'Leave Balance Low',
+        message:
+            'Only $remaining ${_normalizeLeaveType(leaveType)} leave remaining',
+        type: NotificationService.typeLeaveBalanceLow,
+        subtitle: 'Please plan upcoming requests accordingly.',
+      );
+    } catch (_) {
+      // Approval flow is already committed; skip warning on notification error.
+    }
   }
 }

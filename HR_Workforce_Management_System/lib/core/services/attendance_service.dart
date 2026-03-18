@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'notification_service.dart';
+
 /// Firestore collection shape:
 ///   attendance/{uid}/records/{yyyy-MM-dd}
 ///
 /// Record fields:
 ///   date (String), clockIn (Timestamp?), clockOut (Timestamp?),
-///   totalHours (double), status ('present'|'late'|'done')
+///   totalHours (double), status ('present'|'late'|'absent'),
+///   employeeName, department, designation, photoUrl
 class AttendanceService {
   static final _db = FirebaseFirestore.instance;
   static const _rootCol = 'attendance';
@@ -51,6 +54,7 @@ class AttendanceService {
     final now = DateTime.now();
     final ref = _recordRef(userId, now);
     final isLate = await _isLateClockIn(now);
+    final userMeta = await _readUserMeta(userId);
 
     await _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
@@ -72,9 +76,38 @@ class AttendanceService {
         'clockOut': null,
         'totalHours': 0.0,
         'status': isLate ? 'late' : 'present',
+        'employeeName': userMeta.employeeName,
+        'department': userMeta.department,
+        'designation': userMeta.designation,
+        'photoUrl': userMeta.photoUrl,
+        'isManual': false,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     });
+
+    if (isLate) {
+      try {
+        final timeLabel = _format12Hour(now);
+        await NotificationService.send(
+          userId: userId,
+          title: 'Late Arrival Marked',
+          message: 'You clocked in at $timeLabel today',
+          type: NotificationService.typeLate,
+          subtitle: 'Please try to arrive on time tomorrow.',
+          relatedId: _dateKey(now),
+        );
+        await NotificationService.sendToAdmins(
+          title: 'Late Arrival',
+          message: '${userMeta.employeeName} clocked in late at $timeLabel',
+          type: NotificationService.typeLateArrival,
+          subtitle: '${_dateKey(now)} · ${userMeta.department}',
+          relatedId: _dateKey(now),
+          extra: {'employeeUid': userId},
+        );
+      } catch (_) {
+        // Keep attendance flow successful even if notification write fails.
+      }
+    }
 
     return now;
   }
@@ -105,7 +138,7 @@ class AttendanceService {
       tx.set(ref, {
         'clockOut': Timestamp.fromDate(now),
         'totalHours': double.parse(totalHours.toStringAsFixed(2)),
-        'status': data['status'] == 'late' ? 'late' : 'done',
+        'status': data['status'] == 'late' ? 'late' : 'present',
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     });
@@ -205,7 +238,10 @@ class AttendanceService {
         .collectionGroup('records')
         .where('date', isEqualTo: date)
         .get();
-    return parentSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    return parentSnap.docs.map((d) {
+      final userId = d.reference.parent.parent?.id;
+      return {'id': d.id, if (userId != null) 'userId': userId, ...d.data()};
+    }).toList();
   }
 
   static Future<bool> _isLateClockIn(DateTime clockIn) async {
@@ -240,8 +276,47 @@ class AttendanceService {
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
+  static String _format12Hour(DateTime dateTime) {
+    final hour24 = dateTime.hour;
+    final suffix = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour12:$minute $suffix';
+  }
+
   static DateTime _startOfWeek(DateTime date) {
     final base = DateTime(date.year, date.month, date.day);
     return base.subtract(Duration(days: base.weekday - DateTime.monday));
   }
+
+  static Future<_UserAttendanceMeta> _readUserMeta(String uid) async {
+    final snap = await _db.collection('users').doc(uid).get();
+    final data = snap.data() ?? const <String, dynamic>{};
+
+    final employeeName = ((data['name'] as String?) ?? '').trim();
+    final department = ((data['department'] as String?) ?? '').trim();
+    final designation = ((data['designation'] as String?) ?? '').trim();
+    final photoUrl = ((data['photoUrl'] as String?) ?? '').trim();
+
+    return _UserAttendanceMeta(
+      employeeName: employeeName.isEmpty ? 'Employee' : employeeName,
+      department: department,
+      designation: designation,
+      photoUrl: photoUrl,
+    );
+  }
+}
+
+class _UserAttendanceMeta {
+  const _UserAttendanceMeta({
+    required this.employeeName,
+    required this.department,
+    required this.designation,
+    required this.photoUrl,
+  });
+
+  final String employeeName;
+  final String department;
+  final String designation;
+  final String photoUrl;
 }

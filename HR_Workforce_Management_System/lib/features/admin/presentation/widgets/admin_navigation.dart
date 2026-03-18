@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 
-enum AdminSection { dashboard, employees, leaves, payroll, hrPolicy, reports }
+enum AdminSection {
+  dashboard,
+  attendance,
+  employees,
+  leaves,
+  payroll,
+  hrPolicy,
+  reports,
+}
 
 extension AdminSectionX on AdminSection {
   String get label => switch (this) {
     AdminSection.dashboard => 'Dashboard',
+    AdminSection.attendance => 'Attendance',
     AdminSection.employees => 'Employees',
     AdminSection.leaves => 'Leaves',
     AdminSection.payroll => 'Payroll',
@@ -14,6 +23,7 @@ extension AdminSectionX on AdminSection {
 
   IconData get icon => switch (this) {
     AdminSection.dashboard => Icons.dashboard_rounded,
+    AdminSection.attendance => Icons.calendar_month_rounded,
     AdminSection.employees => Icons.groups_rounded,
     AdminSection.leaves => Icons.event_note_rounded,
     AdminSection.payroll => Icons.account_balance_wallet_rounded,
@@ -24,6 +34,7 @@ extension AdminSectionX on AdminSection {
 
 const List<AdminSection> bottomAdminSections = [
   AdminSection.dashboard,
+  AdminSection.attendance,
   AdminSection.employees,
   AdminSection.leaves,
   AdminSection.payroll,

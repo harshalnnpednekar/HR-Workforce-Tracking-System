@@ -87,7 +87,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (snapshot.hasError) {
             return Center(
               child: Text(
-                'Failed to load notifications.\n${snapshot.error}',
+                'Failed to load notifications.\n${snapshot.error}\n\nExpected path: notifications/{uid}/items',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Color(0xFF64748B)),
               ),
@@ -137,7 +137,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     for (final n in list) {
       final ts = n['createdAt'];
       final date = ts is Timestamp ? ts.toDate() : null;
-      final day = date != null ? DateTime(date.year, date.month, date.day) : null;
+      final day = date != null
+          ? DateTime(date.year, date.month, date.day)
+          : null;
 
       if (day == null || day.isAtSameMomentAs(today)) {
         buckets['TODAY']!.add(n);
@@ -183,7 +185,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             notification: item,
             onTap: () async {
               if (item['isRead'] == false) {
-                await NotificationService.markRead(item['id'] as String);
+                await NotificationService.markRead(
+                  item['id'] as String,
+                  userId: widget.userId,
+                  refPath: item['__refPath'] as String?,
+                );
               }
             },
           );
@@ -232,6 +238,7 @@ class _NotifCard extends StatelessWidget {
     final type = (notification['type'] as String?) ?? 'system';
     final title = (notification['title'] as String?) ?? '';
     final message = (notification['message'] as String?) ?? '';
+    final subtitle = (notification['subtitle'] as String?) ?? '';
     final isRead = (notification['isRead'] as bool?) ?? true;
     final ts = notification['createdAt'];
     final timeStr = _formatTime(ts);
@@ -321,6 +328,18 @@ class _NotifCard extends StatelessWidget {
                         fontWeight: FontWeight.w400,
                       ),
                     ),
+                    if (subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 12,
+                          height: 1.3,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -360,45 +379,70 @@ class _NotifMeta {
   static _NotifMeta forType(String type) {
     return switch (type) {
       NotificationService.typeLeaveApproved => const _NotifMeta(
-          icon: Icons.event_available_rounded,
-          iconColor: Color(0xFF16A34A),
-          iconBg: Color(0xFFDCFCE7),
-        ),
+        icon: Icons.event_available_rounded,
+        iconColor: Color(0xFF16A34A),
+        iconBg: Color(0xFFDCFCE7),
+      ),
       NotificationService.typeLeaveRejected => const _NotifMeta(
-          icon: Icons.event_busy_rounded,
-          iconColor: Color(0xFFDC2626),
-          iconBg: Color(0xFFFEE2E2),
-        ),
+        icon: Icons.event_busy_rounded,
+        iconColor: Color(0xFFDC2626),
+        iconBg: Color(0xFFFEE2E2),
+      ),
       NotificationService.typeLeaveRequest => const _NotifMeta(
-          icon: Icons.mail_outline_rounded,
-          iconColor: Color(0xFFFF5B0A),
-          iconBg: Color(0xFFFFF0E8),
-        ),
+        icon: Icons.mail_outline_rounded,
+        iconColor: Color(0xFFFF5B0A),
+        iconBg: Color(0xFFFFF0E8),
+      ),
+      NotificationService.typeLeavePending => const _NotifMeta(
+        icon: Icons.event_note_rounded,
+        iconColor: Color(0xFFFF5B0A),
+        iconBg: Color(0xFFFFF0E8),
+      ),
+      NotificationService.typeLeaveBalanceLow => const _NotifMeta(
+        icon: Icons.warning_amber_rounded,
+        iconColor: Color(0xFFD97706),
+        iconBg: Color(0xFFFEF3C7),
+      ),
       NotificationService.typeAttendance => const _NotifMeta(
-          icon: Icons.access_time_rounded,
-          iconColor: Color(0xFF3B82F6),
-          iconBg: Color(0xFFDEEBFF),
-        ),
+        icon: Icons.access_time_rounded,
+        iconColor: Color(0xFF3B82F6),
+        iconBg: Color(0xFFDEEBFF),
+      ),
       NotificationService.typePayroll => const _NotifMeta(
-          icon: Icons.payments_outlined,
-          iconColor: Color(0xFF16A34A),
-          iconBg: Color(0xFFDCFCE7),
-        ),
+        icon: Icons.payments_outlined,
+        iconColor: Color(0xFF16A34A),
+        iconBg: Color(0xFFDCFCE7),
+      ),
+      NotificationService.typePayrollReminder => const _NotifMeta(
+        icon: Icons.payments_outlined,
+        iconColor: Color(0xFFB91C1C),
+        iconBg: Color(0xFFFEE2E2),
+      ),
       NotificationService.typeLate => const _NotifMeta(
-          icon: Icons.warning_amber_rounded,
-          iconColor: Color(0xFFD97706),
-          iconBg: Color(0xFFFEF3C7),
-        ),
+        icon: Icons.warning_amber_rounded,
+        iconColor: Color(0xFFD97706),
+        iconBg: Color(0xFFFEF3C7),
+      ),
+      NotificationService.typeLateArrival => const _NotifMeta(
+        icon: Icons.access_time_filled_rounded,
+        iconColor: Color(0xFFD97706),
+        iconBg: Color(0xFFFEF3C7),
+      ),
+      NotificationService.typeAbsentSummary => const _NotifMeta(
+        icon: Icons.error_outline_rounded,
+        iconColor: Color(0xFFDC2626),
+        iconBg: Color(0xFFFEE2E2),
+      ),
       NotificationService.typeNewEmployee => const _NotifMeta(
-          icon: Icons.person_add_alt_1_rounded,
-          iconColor: Color(0xFF7C3AED),
-          iconBg: Color(0xFFEDE9FE),
-        ),
+        icon: Icons.person_add_alt_1_rounded,
+        iconColor: Color(0xFF7C3AED),
+        iconBg: Color(0xFFEDE9FE),
+      ),
       _ => const _NotifMeta(
-          icon: Icons.notifications_rounded,
-          iconColor: Color(0xFF6B7280),
-          iconBg: Color(0xFFF3F4F6),
-        ),
+        icon: Icons.notifications_rounded,
+        iconColor: Color(0xFF6B7280),
+        iconBg: Color(0xFFF3F4F6),
+      ),
     };
   }
 }
@@ -439,10 +483,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             "You're all caught up!",
-            style: TextStyle(
-              color: Color(0xFF94A3B8),
-              fontSize: 15,
-            ),
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
           ),
         ],
       ),

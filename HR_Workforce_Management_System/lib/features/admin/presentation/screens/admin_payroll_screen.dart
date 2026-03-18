@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/services/payslip_pdf_service.dart';
 import '../../../../core/services/payroll_service.dart';
 import '../widgets/admin_ui_kit.dart';
 
@@ -16,16 +17,37 @@ class AdminPayrollScreen extends StatefulWidget {
 class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
   late List<String> _monthDocIds;
   int _selectedMonthIndex = 0;
+  bool _initializingMonth = false;
 
   @override
   void initState() {
     super.initState();
-    _monthDocIds = PayrollService.recentMonthDocIds(count: 3).reversed.toList();
+    _monthDocIds = PayrollService.recentMonthDocIds(count: 6).reversed.toList();
+    final adminUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    PayrollService.checkPayrollReminderForAdmin(adminUid);
+    _ensureSelectedMonthPayroll();
   }
 
   String get _selectedMonthDocId => _monthDocIds[_selectedMonthIndex];
 
   String _monthLabel(String docId) => PayrollService.monthDocIdToLabel(docId);
+
+  Future<void> _ensureSelectedMonthPayroll() async {
+    final adminUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (adminUid.isEmpty) return;
+
+    setState(() => _initializingMonth = true);
+    try {
+      await PayrollService.ensurePayrollForMonth(
+        monthYear: _selectedMonthDocId,
+        adminUid: adminUid,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _initializingMonth = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +70,20 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
               final selected = index == _selectedMonthIndex;
               return Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _selectedMonthIndex = index),
+                  onTap: () {
+                    setState(() => _selectedMonthIndex = index);
+                    _ensureSelectedMonthPayroll();
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
-                    margin: EdgeInsets.only(right: index == _monthDocIds.length - 1 ? 0 : 12),
+                    margin: EdgeInsets.only(
+                      right: index == _monthDocIds.length - 1 ? 0 : 12,
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      color: selected ? AdminColors.primary : Colors.transparent,
+                      color: selected
+                          ? AdminColors.primary
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(18),
                       boxShadow: selected
                           ? const [
@@ -67,11 +96,13 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
                           : null,
                     ),
                     child: Text(
-                      _monthLabel(_monthDocIds[index]).split(' ').first,
+                      _monthLabel(_monthDocIds[index]),
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: selected ? Colors.white : const Color(0xFF64748B),
-                        fontSize: 15,
+                        color: selected
+                            ? Colors.white
+                            : const Color(0xFF64748B),
+                        fontSize: 13,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -80,6 +111,27 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
               );
             }),
           ),
+          if (_initializingMonth)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Preparing payroll for selected month...',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 24),
           // ── Summary Cards (live) ──────────────────────────────────────────
           StreamBuilder<PayrollSummary>(
@@ -88,6 +140,8 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
               final summary = snapshot.data;
               final totalNet = summary?.totalNetSalary ?? 0;
               final pending = summary?.pendingCount ?? 0;
+              final percent = summary?.percentChangeFromPreviousMonth ?? 0;
+              final prevTotal = summary?.previousMonthTotal ?? 0;
 
               return GridView.count(
                 crossAxisCount: 2,
@@ -102,7 +156,9 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
                     value: PayrollService.formatCurrency(totalNet),
                     footer: snapshot.connectionState == ConnectionState.waiting
                         ? 'Loading…'
-                        : '${snapshot.data != null ? "Live" : "–"} data',
+                        : prevTotal <= 0
+                        ? 'No previous month data'
+                        : '${percent >= 0 ? '+' : ''}${percent.toStringAsFixed(1)}% vs previous month',
                     footerColor: const Color(0xFF16A34A),
                     loading: !snapshot.hasData,
                   ),
@@ -120,7 +176,9 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
           const SizedBox(height: 28),
           // ── Employee Salary List (live) ────────────────────────────────────
           StreamBuilder<List<Map<String, dynamic>>>(
-            stream: PayrollService.streamAllPayrollForMonth(_selectedMonthDocId),
+            stream: PayrollService.streamAllPayrollForMonth(
+              _selectedMonthDocId,
+            ),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return _InlineError(
@@ -135,7 +193,9 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
                 children: [
                   AdminSectionHeader(
                     title: 'Employee Salaries',
-                    actionLabel: records.isEmpty ? null : '${records.length} employees',
+                    actionLabel: records.isEmpty
+                        ? null
+                        : '${records.length} employees',
                   ),
                   const SizedBox(height: 14),
                   if (!snapshot.hasData)
@@ -172,10 +232,7 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
     );
   }
 
-  void _openPayrollDetail(
-    BuildContext context,
-    Map<String, dynamic> record,
-  ) {
+  void _openPayrollDetail(BuildContext context, Map<String, dynamic> record) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PayrollDetailScreen(
@@ -279,7 +336,10 @@ class _PayrollCard extends StatelessWidget {
           Row(
             children: [
               // Avatar
-              _EmployeeAvatar(name: name, photoUrl: record['photoUrl'] as String?),
+              _EmployeeAvatar(
+                name: name,
+                photoUrl: record['photoUrl'] as String?,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -449,10 +509,7 @@ class _SalaryMetric extends StatelessWidget {
 // ─── Bulk Pay Button ──────────────────────────────────────────────────────────
 
 class _BulkPayButton extends StatefulWidget {
-  const _BulkPayButton({
-    required this.monthDocId,
-    required this.monthLabel,
-  });
+  const _BulkPayButton({required this.monthDocId, required this.monthLabel});
 
   final String monthDocId;
   final String monthLabel;
@@ -516,7 +573,9 @@ class _BulkPayButtonState extends State<_BulkPayButton> {
           ),
           backgroundColor: AdminColors.primary,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       );
     } catch (e) {
@@ -526,7 +585,9 @@ class _BulkPayButtonState extends State<_BulkPayButton> {
           content: Text('Error: $e'),
           backgroundColor: AdminColors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       );
     } finally {
@@ -617,7 +678,10 @@ class _InlineError extends StatelessWidget {
     return AdminSurfaceCard(
       child: Text(
         message,
-        style: const TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          color: Color(0xFF991B1B),
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -644,11 +708,34 @@ class PayrollDetailScreen extends StatefulWidget {
 class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
   late Map<String, dynamic> _record;
   bool _marking = false;
+  bool _generatingPdf = false;
 
   @override
   void initState() {
     super.initState();
     _record = Map.from(widget.record);
+  }
+
+  Future<void> _generatePdf() async {
+    if (_uid.isEmpty) return;
+    setState(() => _generatingPdf = true);
+    try {
+      await PayslipPdfService.generateAndSharePayslip(
+        uid: _uid,
+        payrollData: _record,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Payslip generated and shared.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to generate PDF: $e')));
+    } finally {
+      if (mounted) setState(() => _generatingPdf = false);
+    }
   }
 
   bool get _isPaid => (_record['status'] as String?) == 'paid';
@@ -676,7 +763,9 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
           content: const Text('Marked as paid successfully!'),
           backgroundColor: AdminColors.green,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       );
     } catch (e) {
@@ -686,7 +775,9 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
           content: Text('Error: $e'),
           backgroundColor: AdminColors.red,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       );
     } finally {
@@ -711,7 +802,8 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
     final leaveDeduction = (_record['leaveDeduction'] as num?)?.toDouble() ?? 0;
     final pf = (_record['pf'] as num?)?.toDouble() ?? 0;
     final profTax = (_record['professionalTax'] as num?)?.toDouble() ?? 0;
-    final totalDeductions = (_record['totalDeductions'] as num?)?.toDouble() ?? 0;
+    final totalDeductions =
+        (_record['totalDeductions'] as num?)?.toDouble() ?? 0;
 
     final netSalary = (_record['netSalary'] as num?)?.toDouble() ?? 0;
 
@@ -806,9 +898,18 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
               iconColor: AdminColors.green,
               iconBg: AdminColors.softGreen,
               rows: [
-                _DetailRow(label: 'Basic Salary', value: PayrollService.formatCurrency(basic)),
-                _DetailRow(label: 'HRA', value: PayrollService.formatCurrency(hra)),
-                _DetailRow(label: 'Conveyance', value: PayrollService.formatCurrency(conveyance)),
+                _DetailRow(
+                  label: 'Basic Salary',
+                  value: PayrollService.formatCurrency(basic),
+                ),
+                _DetailRow(
+                  label: 'HRA',
+                  value: PayrollService.formatCurrency(hra),
+                ),
+                _DetailRow(
+                  label: 'Conveyance',
+                  value: PayrollService.formatCurrency(conveyance),
+                ),
               ],
               total: _DetailRow(
                 label: 'Gross Salary',
@@ -825,10 +926,22 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
               iconColor: AdminColors.red,
               iconBg: AdminColors.softRed,
               rows: [
-                _DetailRow(label: 'Late Marks', value: '-${PayrollService.formatCurrency(lateDeduction)}'),
-                _DetailRow(label: 'Leave Deduction', value: '-${PayrollService.formatCurrency(leaveDeduction)}'),
-                _DetailRow(label: 'Provident Fund', value: '-${PayrollService.formatCurrency(pf)}'),
-                _DetailRow(label: 'Professional Tax', value: '-${PayrollService.formatCurrency(profTax)}'),
+                _DetailRow(
+                  label: 'Late Marks',
+                  value: '-${PayrollService.formatCurrency(lateDeduction)}',
+                ),
+                _DetailRow(
+                  label: 'Leave Deduction',
+                  value: '-${PayrollService.formatCurrency(leaveDeduction)}',
+                ),
+                _DetailRow(
+                  label: 'Provident Fund',
+                  value: '-${PayrollService.formatCurrency(pf)}',
+                ),
+                _DetailRow(
+                  label: 'Professional Tax',
+                  value: '-${PayrollService.formatCurrency(profTax)}',
+                ),
               ],
               total: _DetailRow(
                 label: 'Total Deductions',
@@ -909,6 +1022,27 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
             ],
             const SizedBox(height: 28),
             // ── Actions ─────────────────────────────────────────────────────
+            OutlinedButton.icon(
+              onPressed: _generatingPdf ? null : _generatePdf,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 54),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              icon: _generatingPdf
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_rounded),
+              label: Text(
+                _generatingPdf ? 'Generating PDF…' : 'Generate PDF',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 12),
             if (!_isPaid)
               FilledButton.icon(
                 onPressed: _marking ? null : _markAsPaid,
@@ -932,7 +1066,10 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
                     : const Icon(Icons.check_circle_outline_rounded),
                 label: Text(
                   _marking ? 'Marking as Paid…' : 'Mark as Paid',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
           ],
@@ -987,10 +1124,12 @@ class _DetailSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          ...rows.map((row) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _buildRow(row),
-              )),
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildRow(row),
+            ),
+          ),
           const Divider(color: AdminColors.border, height: 20),
           _buildRow(total),
         ],
@@ -1013,7 +1152,9 @@ class _DetailSection extends StatelessWidget {
         Text(
           row.value,
           style: TextStyle(
-            color: row.isTotal ? (row.totalColor ?? AdminColors.text) : AdminColors.text,
+            color: row.isTotal
+                ? (row.totalColor ?? AdminColors.text)
+                : AdminColors.text,
             fontWeight: row.isTotal ? FontWeight.w800 : FontWeight.w600,
             fontSize: row.isTotal ? 15 : 14,
           ),

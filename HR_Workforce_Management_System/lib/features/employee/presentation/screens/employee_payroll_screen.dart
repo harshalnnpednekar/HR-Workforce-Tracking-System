@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/services/payslip_pdf_service.dart';
 import '../../../../core/services/payroll_service.dart';
 import 'shared/employee_dashboard_constants.dart';
 
@@ -185,7 +186,7 @@ class _CurrentMonthTab extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SalaryCard(payroll: payroll),
+            _SalaryCard(userId: userId, payroll: payroll),
             const SizedBox(height: 22),
             _EarningsCard(payroll: payroll),
             const SizedBox(height: 18),
@@ -200,8 +201,9 @@ class _CurrentMonthTab extends StatelessWidget {
 }
 
 class _SalaryCard extends StatelessWidget {
-  const _SalaryCard({required this.payroll});
+  const _SalaryCard({required this.userId, required this.payroll});
 
+  final String userId;
   final Map<String, dynamic> payroll;
 
   @override
@@ -284,9 +286,8 @@ class _SalaryCard extends StatelessWidget {
                 ),
               ),
               TextButton.icon(
-                onPressed: slipUrl.isEmpty
-                    ? null
-                    : () => _openPdf(context, slipUrl),
+                onPressed: () =>
+                    _openOrGeneratePdf(context, userId, payroll, slipUrl),
                 style: TextButton.styleFrom(
                   backgroundColor: Colors.white,
                   minimumSize: const Size(120, 48),
@@ -324,6 +325,35 @@ class _SalaryCard extends StatelessWidget {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       showActionMessage(context, 'Could not open payslip URL.');
+    }
+  }
+
+  Future<void> _openOrGeneratePdf(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> payrollData,
+    String url,
+  ) async {
+    if (url.trim().isNotEmpty) {
+      await _openPdf(context, url);
+      return;
+    }
+
+    try {
+      showActionMessage(context, 'Generating payslip PDF...');
+      final uploadedUrl = await PayslipPdfService.generateAndSharePayslip(
+        uid: uid,
+        payrollData: payrollData,
+      );
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty && context.mounted) {
+        showActionMessage(context, 'Payslip generated and uploaded.');
+      } else if (context.mounted) {
+        showActionMessage(context, 'Payslip shared. Cloud upload unavailable.');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        showActionMessage(context, 'Failed to generate payslip PDF.');
+      }
     }
   }
 }
@@ -680,9 +710,8 @@ class _PreviousSlipsCard extends StatelessWidget {
                     title: month,
                     amount: amount,
                     status: status,
-                    onDownload: url.isEmpty
-                        ? null
-                        : () => _openPdf(context, url),
+                    onDownload: () =>
+                        _openOrGeneratePdf(context, userId, row, url),
                   ),
                 );
               }),
@@ -702,6 +731,35 @@ class _PreviousSlipsCard extends StatelessWidget {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       showActionMessage(context, 'Could not open payslip URL.');
+    }
+  }
+
+  Future<void> _openOrGeneratePdf(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> payrollData,
+    String url,
+  ) async {
+    if (url.trim().isNotEmpty) {
+      await _openPdf(context, url);
+      return;
+    }
+
+    try {
+      showActionMessage(context, 'Generating payslip PDF...');
+      final uploadedUrl = await PayslipPdfService.generateAndSharePayslip(
+        uid: uid,
+        payrollData: payrollData,
+      );
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty && context.mounted) {
+        showActionMessage(context, 'Payslip generated and uploaded.');
+      } else if (context.mounted) {
+        showActionMessage(context, 'Payslip shared. Cloud upload unavailable.');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        showActionMessage(context, 'Failed to generate payslip PDF.');
+      }
     }
   }
 }

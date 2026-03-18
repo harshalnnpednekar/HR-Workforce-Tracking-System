@@ -42,7 +42,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       _QuickAction(
         label: 'View Attendance',
         icon: Icons.fact_check_rounded,
-        onTap: () => widget.onSectionSelected(AdminSection.dashboard),
+        onTap: () => widget.onSectionSelected(AdminSection.attendance),
       ),
       _QuickAction(
         label: 'Approve Leaves',

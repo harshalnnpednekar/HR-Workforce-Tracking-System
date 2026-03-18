@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../../core/services/notification_service.dart';
-import '../../screens/notifications_screen.dart';
+import '../../../../admin/presentation/screens/notifications_screen.dart';
 
 /// Shared constants for the entire employee dashboard
 class AppColors {
@@ -68,10 +68,8 @@ class BellIcon extends StatelessWidget {
             if (!context.mounted) return;
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => _NotificationsPageWrapper(
-                  userId: uid,
-                  isAdmin: false,
-                ),
+                builder: (_) =>
+                    _NotificationsPageWrapper(userId: uid, isAdmin: false),
               ),
             );
           },
