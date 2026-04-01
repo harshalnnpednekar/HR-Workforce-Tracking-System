@@ -50,6 +50,32 @@ class AdminAttendanceLogData {
 class AdminAttendanceService {
   static final _db = FirebaseFirestore.instance;
 
+  static Future<DateTime?> getLatestAttendanceDate() async {
+    try {
+      final snap = await _db
+          .collectionGroup('records')
+          .orderBy('date', descending: true)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty) return null;
+
+      final rawDate = snap.docs.first.data()['date'];
+      if (rawDate is String && rawDate.trim().isNotEmpty) {
+        final parsed = DateTime.tryParse(rawDate.trim());
+        if (parsed != null) {
+          return DateTime(parsed.year, parsed.month, parsed.day);
+        }
+      }
+
+      final id = snap.docs.first.id;
+      final parsedFromId = DateTime.tryParse(id);
+      if (parsedFromId == null) return null;
+      return DateTime(parsedFromId.year, parsedFromId.month, parsedFromId.day);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<AdminAttendanceDayData> getOverviewForDate(
     DateTime date,
   ) async {
@@ -75,15 +101,73 @@ class AdminAttendanceService {
     DateTime date,
   ) async {
     final dateKey = DateFormat('yyyy-MM-dd').format(date);
+    List<Map<String, dynamic>> rows = const [];
+
     try {
       final snap = await _db
           .collectionGroup('records')
           .where('date', isEqualTo: dateKey)
           .get();
-      return _rowsFromRecordsSnapshot(snap);
+      rows = _rowsFromRecordsSnapshot(snap);
     } catch (_) {
+      rows = const [];
+    }
+
+    if (rows.isNotEmpty) {
+      return rows;
+    }
+
+    return _fallbackRecordsForDate(dateKey);
+  }
+
+  static Future<List<Map<String, dynamic>>> _fallbackRecordsForDate(
+    String dateKey,
+  ) async {
+    final candidateIds = <String>{};
+
+    try {
+      final usersSnap = await _db.collection('users').get();
+      for (final userDoc in usersSnap.docs) {
+        candidateIds.add(userDoc.id);
+        final data = userDoc.data();
+        final employeeId = (data['employeeId'] as String?)?.trim();
+        if (employeeId != null && employeeId.isNotEmpty) {
+          candidateIds.add(employeeId);
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final attendanceParents = await _db.collection('attendance').get();
+      for (final parent in attendanceParents.docs) {
+        candidateIds.add(parent.id);
+      }
+    } catch (_) {}
+
+    if (candidateIds.isEmpty) {
       return const [];
     }
+
+    final fetches = candidateIds
+        .map((id) {
+          return _db
+              .collection('attendance')
+              .doc(id)
+              .collection('records')
+              .doc(dateKey)
+              .get();
+        })
+        .toList(growable: false);
+
+    final docs = await Future.wait(fetches);
+    final rows = <Map<String, dynamic>>[];
+    final ids = candidateIds.toList(growable: false);
+    for (var i = 0; i < docs.length; i++) {
+      final doc = docs[i];
+      if (!doc.exists) continue;
+      rows.add({'id': doc.id, 'userId': ids[i], ...?doc.data()});
+    }
+    return rows;
   }
 
   static List<Map<String, dynamic>> _rowsFromRecordsSnapshot(

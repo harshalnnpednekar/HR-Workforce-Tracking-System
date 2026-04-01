@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/services/payslip_pdf_service.dart';
 import '../../../../core/services/payroll_service.dart';
+import 'admin_all_payroll_screen.dart';
 import '../widgets/admin_ui_kit.dart';
 
 class AdminPayrollScreen extends StatefulWidget {
@@ -15,22 +16,48 @@ class AdminPayrollScreen extends StatefulWidget {
 }
 
 class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
-  late List<String> _monthDocIds;
-  int _selectedMonthIndex = 0;
+  late DateTime _selectedMonth;
   bool _initializingMonth = false;
 
   @override
   void initState() {
     super.initState();
-    _monthDocIds = PayrollService.recentMonthDocIds(count: 6).reversed.toList();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month, 1);
     final adminUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     PayrollService.checkPayrollReminderForAdmin(adminUid);
     _ensureSelectedMonthPayroll();
   }
 
-  String get _selectedMonthDocId => _monthDocIds[_selectedMonthIndex];
+  String get _selectedMonthDocId => PayrollService.monthDocId(_selectedMonth);
+
+  String get _selectedMonthLabel =>
+      DateFormat('MMMM yyyy').format(_selectedMonth);
 
   String _monthLabel(String docId) => PayrollService.monthDocIdToLabel(docId);
+
+  Future<void> _pickMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth,
+      firstDate: DateTime(DateTime.now().year - 5, 1, 1),
+      lastDate: DateTime(DateTime.now().year + 2, 12, 31),
+      helpText: 'Select Payroll Month',
+    );
+
+    if (!mounted || picked == null) return;
+
+    final normalized = DateTime(picked.year, picked.month, 1);
+    if (normalized.year == _selectedMonth.year &&
+        normalized.month == _selectedMonth.month) {
+      return;
+    }
+
+    setState(() {
+      _selectedMonth = normalized;
+    });
+    _ensureSelectedMonthPayroll();
+  }
 
   Future<void> _ensureSelectedMonthPayroll() async {
     final adminUid = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -49,6 +76,245 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
     }
   }
 
+  Future<void> _openEditPayrollSheet(Map<String, dynamic> record) async {
+    final status = (record['status'] as String?)?.toLowerCase() ?? 'pending';
+    if (status != 'pending') return;
+
+    final uid = (record['uid'] as String?) ?? '';
+    if (uid.isEmpty) return;
+
+    final adminUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (adminUid.isEmpty) return;
+
+    double n2(double value) => double.parse(value.toStringAsFixed(2));
+
+    final basicCtrl = TextEditingController(
+      text: ((record['basicSalary'] as num?)?.toDouble() ?? 0).toStringAsFixed(
+        2,
+      ),
+    );
+    final hraCtrl = TextEditingController(
+      text: ((record['hra'] as num?)?.toDouble() ?? 0).toStringAsFixed(2),
+    );
+    final conveyanceCtrl = TextEditingController(
+      text: ((record['conveyance'] as num?)?.toDouble() ?? 0).toStringAsFixed(
+        2,
+      ),
+    );
+    final lateDeductionCtrl = TextEditingController(
+      text: ((record['lateDeduction'] as num?)?.toDouble() ?? 0)
+          .toStringAsFixed(2),
+    );
+    final leaveDeductionCtrl = TextEditingController(
+      text: ((record['leaveDeduction'] as num?)?.toDouble() ?? 0)
+          .toStringAsFixed(2),
+    );
+    final pfCtrl = TextEditingController(
+      text: ((record['pf'] as num?)?.toDouble() ?? 0).toStringAsFixed(2),
+    );
+    final profTaxCtrl = TextEditingController(
+      text: ((record['professionalTax'] as num?)?.toDouble() ?? 0)
+          .toStringAsFixed(2),
+    );
+
+    final currentBasic = (record['basicSalary'] as num?)?.toDouble() ?? 0;
+    final currentHra = (record['hra'] as num?)?.toDouble() ?? 0;
+    final expectedHra = n2(currentBasic * 0.4);
+    var autoHra = (currentHra - expectedHra).abs() < 0.01;
+    var saving = false;
+
+    double parseAmount(String raw) =>
+        double.tryParse(raw.trim().replaceAll(',', '')) ?? 0;
+
+    if (autoHra) {
+      hraCtrl.text = n2(parseAmount(basicCtrl.text) * 0.4).toStringAsFixed(2);
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void syncAutoHra() {
+              if (!autoHra) return;
+              final basic = parseAmount(basicCtrl.text);
+              hraCtrl.text = n2(basic * 0.4).toStringAsFixed(2);
+            }
+
+            double grossValue() {
+              return n2(
+                parseAmount(basicCtrl.text) +
+                    parseAmount(hraCtrl.text) +
+                    parseAmount(conveyanceCtrl.text),
+              );
+            }
+
+            double deductionValue() {
+              return n2(
+                parseAmount(lateDeductionCtrl.text) +
+                    parseAmount(leaveDeductionCtrl.text) +
+                    parseAmount(pfCtrl.text) +
+                    parseAmount(profTaxCtrl.text),
+              );
+            }
+
+            Future<void> save() async {
+              if (saving) return;
+              setSheetState(() => saving = true);
+              try {
+                await PayrollService.editPendingPayroll(
+                  uid: uid,
+                  monthYear: _selectedMonthDocId,
+                  adminUid: adminUid,
+                  basicSalary: parseAmount(basicCtrl.text),
+                  hra: parseAmount(hraCtrl.text),
+                  conveyance: parseAmount(conveyanceCtrl.text),
+                  lateDeduction: parseAmount(lateDeductionCtrl.text),
+                  leaveDeduction: parseAmount(leaveDeductionCtrl.text),
+                  pf: parseAmount(pfCtrl.text),
+                  professionalTax: parseAmount(profTaxCtrl.text),
+                  isHraAuto: autoHra,
+                );
+                if (!mounted) return;
+                Navigator.of(sheetContext).pop();
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Payroll updated for ${(record['employeeName'] as String?) ?? 'Employee'}',
+                    ),
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                setSheetState(() => saving = false);
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(content: Text('Failed to update payroll: $e')),
+                );
+              }
+            }
+
+            final gross = grossValue();
+            final deductions = deductionValue();
+            final net = n2(gross - deductions);
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Edit Payroll · ${(record['employeeName'] as String?) ?? 'Employee'}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _MoneyField(
+                        label: 'Basic Salary',
+                        controller: basicCtrl,
+                        onChanged: (_) => setSheetState(syncAutoHra),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _MoneyField(
+                              label: 'HRA',
+                              controller: hraCtrl,
+                              enabled: !autoHra,
+                              onChanged: (_) => setSheetState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SwitchListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text(
+                                'Auto HRA (40%)',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              value: autoHra,
+                              onChanged: (value) {
+                                setSheetState(() {
+                                  autoHra = value;
+                                  syncAutoHra();
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      _MoneyField(
+                        label: 'Conveyance',
+                        controller: conveyanceCtrl,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      _MoneyField(
+                        label: 'Late Deduction',
+                        controller: lateDeductionCtrl,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      _MoneyField(
+                        label: 'Leave Deduction',
+                        controller: leaveDeductionCtrl,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      _MoneyField(
+                        label: 'PF',
+                        controller: pfCtrl,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      _MoneyField(
+                        label: 'Professional Tax',
+                        controller: profTaxCtrl,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Gross: ${PayrollService.formatCurrency(gross)} · Deductions: ${PayrollService.formatCurrency(deductions)}',
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Net Salary: ${PayrollService.formatCurrency(net)}',
+                        style: const TextStyle(
+                          color: AdminColors.primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: saving ? null : save,
+                          child: Text(saving ? 'Saving...' : 'Save'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -63,53 +329,63 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
               color: AdminColors.text,
             ),
           ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AdminAllPayrollScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.view_list_rounded),
+              label: const Text('View All Payroll'),
+            ),
+          ),
           const SizedBox(height: 18),
           // ── Month Selector ────────────────────────────────────────────────
-          Row(
-            children: List.generate(_monthDocIds.length, (index) {
-              final selected = index == _selectedMonthIndex;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedMonthIndex = index);
-                    _ensureSelectedMonthPayroll();
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    margin: EdgeInsets.only(
-                      right: index == _monthDocIds.length - 1 ? 0 : 12,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AdminColors.primary
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: selected
-                          ? const [
-                              BoxShadow(
-                                color: Color(0x33FF5B0A),
-                                blurRadius: 20,
-                                offset: Offset(0, 10),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Text(
-                      _monthLabel(_monthDocIds[index]),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: selected
-                            ? Colors.white
-                            : const Color(0xFF64748B),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+          AdminSurfaceCard(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.calendar_month_rounded,
+                  color: AdminColors.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Payroll Month',
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _selectedMonthLabel,
+                        style: const TextStyle(
+                          color: AdminColors.text,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            }),
+                TextButton.icon(
+                  onPressed: _pickMonth,
+                  icon: const Icon(Icons.edit_calendar_rounded),
+                  label: const Text('Change'),
+                ),
+              ],
+            ),
           ),
           if (_initializingMonth)
             const Padding(
@@ -214,6 +490,11 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
                         child: _PayrollCard(
                           record: record,
                           onTap: () => _openPayrollDetail(context, record),
+                          onEdit:
+                              ((record['status'] as String?)?.toLowerCase() ==
+                                  'pending')
+                              ? () => _openEditPayrollSheet(record)
+                              : null,
                         ),
                       ),
                     ),
@@ -314,10 +595,11 @@ class _PayrollSummaryCard extends StatelessWidget {
 // ─── Employee Payroll Card ─────────────────────────────────────────────────────
 
 class _PayrollCard extends StatelessWidget {
-  const _PayrollCard({required this.record, this.onTap});
+  const _PayrollCard({required this.record, this.onTap, this.onEdit});
 
   final Map<String, dynamic> record;
   final VoidCallback? onTap;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -365,6 +647,15 @@ class _PayrollCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onEdit != null)
+                IconButton(
+                  tooltip: 'Edit payroll',
+                  onPressed: onEdit,
+                  icon: const Icon(
+                    Icons.edit_rounded,
+                    color: Color(0xFFCC6D00),
+                  ),
+                ),
               AdminStatusPill(
                 label: isPaid ? 'PAID' : 'PENDING',
                 backgroundColor: isPaid
@@ -681,6 +972,39 @@ class _InlineError extends StatelessWidget {
         style: const TextStyle(
           color: Color(0xFF991B1B),
           fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _MoneyField extends StatelessWidget {
+  const _MoneyField({
+    required this.label,
+    required this.controller,
+    this.enabled = true,
+    this.onChanged,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final bool enabled;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: controller,
+        enabled: enabled,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixText: '₹ ',
+          border: const OutlineInputBorder(),
+          isDense: true,
         ),
       ),
     );

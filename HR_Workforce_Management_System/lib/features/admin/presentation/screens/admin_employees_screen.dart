@@ -1370,11 +1370,11 @@ class _EmployeeDetailScreenState extends State<_EmployeeDetailScreen> {
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 8),
-                         Text(
-                           'Basic Salary: ₹${NumberFormat('#,##0').format((user['basicSalary'] as num?) ?? 0)}',
+                    Text(
+                      'Basic Salary: ₹${NumberFormat('#,##0').format((user['basicSalary'] as num?) ?? 0)}',
                     ),
-                         Text(
-                           'Current Net Pay: ₹${NumberFormat('#,##0').format((payroll?['netSalary'] as num?) ?? 0)}',
+                    Text(
+                      'Current Net Pay: ₹${NumberFormat('#,##0').format((payroll?['netSalary'] as num?) ?? 0)}',
                     ),
                   ],
                 ),

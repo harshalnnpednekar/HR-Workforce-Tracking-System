@@ -30,6 +30,21 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
     _focusedMonth = DateTime(now.year, now.month, 1);
     _selectedDate = DateTime(now.year, now.month, now.day);
     _reload();
+    _autoSelectDateWithLogs();
+  }
+
+  Future<void> _autoSelectDateWithLogs() async {
+    final initial = await _dayFuture;
+    if (!mounted || initial.logs.isNotEmpty) return;
+
+    final latest = await AdminAttendanceService.getLatestAttendanceDate();
+    if (!mounted || latest == null) return;
+
+    setState(() {
+      _focusedMonth = DateTime(latest.year, latest.month, 1);
+      _selectedDate = latest;
+      _reload();
+    });
   }
 
   void _reload() {

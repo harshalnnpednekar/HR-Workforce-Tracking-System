@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/services/attendance_report_pdf_service.dart';
+import '../../../../core/services/leave_report_pdf_service.dart';
 import '../../../../core/services/payslip_pdf_service.dart';
 import '../../../../core/services/payroll_service.dart';
 import 'shared/employee_dashboard_constants.dart';
@@ -1006,6 +1008,11 @@ class _DocumentsTab extends StatelessWidget {
           child: _PreviousSlipsCard(userId: userId),
         ),
         const SizedBox(height: 14),
+        _DocumentsSection(
+          title: 'Reports',
+          child: _ReportDocsList(userId: userId),
+        ),
+        const SizedBox(height: 14),
         const _DocumentsSection(
           title: 'Employment Documents',
           child: _SimpleDocsList(
@@ -1091,6 +1098,98 @@ class _SimpleDocsList extends StatelessWidget {
               ),
             )
             .toList(),
+      ),
+    );
+  }
+}
+
+class _ReportDocsList extends StatelessWidget {
+  const _ReportDocsList({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context) {
+    return BaseCard(
+      child: Column(
+        children: [
+          _ReportDocRow(
+            icon: Icons.fact_check_outlined,
+            label: 'Attendance Report (Current Month)',
+            onDownload: () => _generateAttendanceReport(context),
+          ),
+          const Divider(height: 18, color: AppColors.cardBorder),
+          _ReportDocRow(
+            icon: Icons.event_note_rounded,
+            label: 'Leave Summary Report',
+            onDownload: () => _generateLeaveSummaryReport(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateAttendanceReport(BuildContext context) async {
+    if (userId.trim().isEmpty) {
+      showActionMessage(context, 'User session unavailable.');
+      return;
+    }
+
+    try {
+      showActionMessage(context, 'Generating attendance report PDF...');
+      await AttendanceReportPdfService.generateAndShareMonthlyReport(
+        uid: userId,
+      );
+    } catch (_) {
+      if (context.mounted) {
+        showActionMessage(context, 'Failed to generate attendance report.');
+      }
+    }
+  }
+
+  Future<void> _generateLeaveSummaryReport(BuildContext context) async {
+    if (userId.trim().isEmpty) {
+      showActionMessage(context, 'User session unavailable.');
+      return;
+    }
+
+    try {
+      showActionMessage(context, 'Generating leave summary PDF...');
+      await LeaveReportPdfService.generateAndShareLeaveSummary(uid: userId);
+    } catch (_) {
+      if (context.mounted) {
+        showActionMessage(context, 'Failed to generate leave summary report.');
+      }
+    }
+  }
+}
+
+class _ReportDocRow extends StatelessWidget {
+  const _ReportDocRow({
+    required this.icon,
+    required this.label,
+    required this.onDownload,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF7B8EA9)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label)),
+          IconButton(
+            onPressed: onDownload,
+            icon: const Icon(Icons.download_rounded, color: AppColors.primary),
+            tooltip: 'Download PDF',
+          ),
+        ],
       ),
     );
   }

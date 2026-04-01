@@ -69,10 +69,14 @@ class PayrollService {
   ) {
     return _db
         .collectionGroup('months')
-        .where('monthYear', isEqualTo: monthYear)
         .snapshots()
         .map(
           (snap) => snap.docs
+              .where(
+                (d) =>
+                    ((d.data()['monthYear'] as String?) ?? '').toLowerCase() ==
+                    monthYear.toLowerCase(),
+              )
               .map(
                 (d) => {
                   'id': d.id,
@@ -82,6 +86,34 @@ class PayrollService {
               )
               .toList(),
         );
+  }
+
+  /// Streams all payroll records across all months and employees.
+  static Stream<List<Map<String, dynamic>>> streamAllPayrollRecords() {
+    return _db.collectionGroup('months').snapshots().map((snap) {
+      final rows = snap.docs
+          .map(
+            (d) => {
+              'id': d.id,
+              'uid': d.reference.parent.parent?.id ?? '',
+              ...d.data(),
+            },
+          )
+          .toList(growable: false);
+
+      rows.sort((a, b) {
+        final aMonth = ((a['monthYear'] as String?) ?? '').toLowerCase();
+        final bMonth = ((b['monthYear'] as String?) ?? '').toLowerCase();
+        final aDate = monthDocIdToDate(aMonth);
+        final bDate = monthDocIdToDate(bMonth);
+        if (aDate != null && bDate != null) {
+          return bDate.compareTo(aDate);
+        }
+        return bMonth.compareTo(aMonth);
+      });
+
+      return rows;
+    });
   }
 
   /// Streams the total net salary and pending count for a given [monthYear].
@@ -95,12 +127,12 @@ class PayrollService {
       }
 
       final previousMonthDoc = previousMonthDocId(monthYear);
-      final prevSnap = await _db
-          .collectionGroup('months')
-          .where('monthYear', isEqualTo: previousMonthDoc)
-          .get();
+      final prevSnap = await _db.collectionGroup('months').get();
       double previousTotal = 0;
       for (final doc in prevSnap.docs) {
+        final docMonth = ((doc.data()['monthYear'] as String?) ?? '')
+            .toLowerCase();
+        if (docMonth != previousMonthDoc.toLowerCase()) continue;
         previousTotal += (doc.data()['netSalary'] as num?)?.toDouble() ?? 0;
       }
 
@@ -166,14 +198,13 @@ class PayrollService {
 
     if (employees.docs.isEmpty) return 0;
 
-    final existingSnap = await _db
-        .collectionGroup('months')
-        .where('monthYear', isEqualTo: monthYear)
-        .get();
+    final existingSnap = await _db.collectionGroup('months').get();
     final existingByUid = <String>{
       for (final doc in existingSnap.docs)
-        if (doc.reference.parent.parent?.id != null)
-          doc.reference.parent.parent!.id,
+        if ((((doc.data())['monthYear'] as String?) ?? '').toLowerCase() ==
+            monthYear.toLowerCase())
+          if (doc.reference.parent.parent?.id != null)
+            doc.reference.parent.parent!.id,
     };
 
     final toCreate = employees.docs
@@ -293,11 +324,33 @@ class PayrollService {
         .where('date', isLessThanOrEqualTo: monthEnd)
         .get();
 
+    final presentRecords = await _db
+        .collection('attendance')
+        .doc(uid)
+        .collection('records')
+        .where('status', isEqualTo: 'present')
+        .where('date', isGreaterThanOrEqualTo: monthStart)
+        .where('date', isLessThanOrEqualTo: monthEnd)
+        .get();
+
+    final leaveRecords = await _db
+        .collection('attendance')
+        .doc(uid)
+        .collection('records')
+        .where('status', isEqualTo: 'leave')
+        .where('date', isGreaterThanOrEqualTo: monthStart)
+        .where('date', isLessThanOrEqualTo: monthEnd)
+        .get();
+
     final lateMarks = lateRecords.docs.length;
     final deductibleLateMarks = (lateMarks - maxAllowedLateMarks).clamp(0, 999);
     final lateDeduction = deductibleLateMarks * lateDeductionPerMark;
 
     final absentDays = absentRecords.docs.length;
+    final presentDays = presentRecords.docs.length;
+    final leaveDays = leaveRecords.docs.length;
+    final totalDays = presentDays + lateMarks + absentDays + leaveDays;
+
     final leaveDeduction = absentDays * absentDeductionPerDay;
 
     final pf = baseSalary * pfPercentage;
@@ -315,19 +368,28 @@ class PayrollService {
       'department': (user['department'] as String?) ?? '',
       'photoUrl': (user['photoUrl'] as String?) ?? '',
       'bankLast4': (user['bankLast4'] as String?) ?? '----',
+      'joiningDate': (user['joiningDate'] as String?) ?? '',
       'month': _monthNames[month - 1],
       'year': year,
       'monthYear': monthYear,
+      'payPeriod': '01 - 30',
+      // Attendance Summary
+      'totalDays': totalDays,
+      'presentDays': presentDays,
+      'lateDays': lateMarks,
+      'absentDays': absentDays,
+      'leaveDays': leaveDays,
+      // Earnings
       'basicSalary': baseSalary,
       'baseSalary': baseSalary,
       'hra': hra,
       'conveyance': conveyance,
       'grossSalary': grossSalary,
+      // Deductions
       'lateDeduction': lateDeduction,
       'leaveDeduction': leaveDeduction,
       'lateMarks': lateMarks,
       'deductibleLateMarks': deductibleLateMarks,
-      'absentDays': absentDays,
       'pf': pf,
       'professionalTax': professionalTax,
       'totalDeductions': totalDeductions,
@@ -388,6 +450,85 @@ class PayrollService {
     }
   }
 
+  /// Edits a pending payroll document and recalculates salary totals.
+  /// Throws when the payroll is already paid or missing.
+  static Future<void> editPendingPayroll({
+    required String uid,
+    required String monthYear,
+    required String adminUid,
+    required double basicSalary,
+    required double hra,
+    required double conveyance,
+    required double lateDeduction,
+    required double leaveDeduction,
+    required double pf,
+    required double professionalTax,
+    required bool isHraAuto,
+  }) async {
+    final ref = _months(uid).doc(monthYear);
+    final snap = await ref.get();
+    if (!snap.exists) {
+      throw Exception('Payroll record not found.');
+    }
+
+    final existing = snap.data() ?? const <String, dynamic>{};
+    final status = (existing['status'] as String?)?.toLowerCase() ?? '';
+    if (status == 'paid') {
+      throw Exception('Paid payroll cannot be edited.');
+    }
+
+    double n2(double value) => double.parse(value.toStringAsFixed(2));
+
+    final safeBasic = n2(basicSalary < 0 ? 0 : basicSalary);
+    final safeHra = n2(hra < 0 ? 0 : hra);
+    final safeConveyance = n2(conveyance < 0 ? 0 : conveyance);
+    final safeLateDeduction = n2(lateDeduction < 0 ? 0 : lateDeduction);
+    final safeLeaveDeduction = n2(leaveDeduction < 0 ? 0 : leaveDeduction);
+    final safePf = n2(pf < 0 ? 0 : pf);
+    final safeProfessionalTax = n2(professionalTax < 0 ? 0 : professionalTax);
+
+    final grossSalary = n2(safeBasic + safeHra + safeConveyance);
+    final totalDeductions = n2(
+      safeLateDeduction + safeLeaveDeduction + safePf + safeProfessionalTax,
+    );
+    final netSalary = n2(grossSalary - totalDeductions);
+
+    final previousNet =
+        (existing['netSalary'] as num?)?.toDouble() ?? netSalary;
+
+    await ref.update({
+      'basicSalary': safeBasic,
+      'baseSalary': safeBasic,
+      'hra': safeHra,
+      'conveyance': safeConveyance,
+      'grossSalary': grossSalary,
+      'lateDeduction': safeLateDeduction,
+      'leaveDeduction': safeLeaveDeduction,
+      'pf': safePf,
+      'professionalTax': safeProfessionalTax,
+      'totalDeductions': totalDeductions,
+      'netSalary': netSalary,
+      'status': 'pending',
+      'isEdited': true,
+      'editedBy': adminUid,
+      'editedAt': FieldValue.serverTimestamp(),
+      'originalNetSalary': previousNet,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'isHraAuto': isHraAuto,
+    });
+
+    await _db.collection('activityLog').add({
+      'type': 'payroll-edit',
+      'message':
+          'Payroll $monthYear updated for ${existing['employeeName'] ?? 'Employee'}',
+      'employeeName': existing['employeeName'] ?? 'Employee',
+      'uid': uid,
+      'processedBy': adminUid,
+      'monthYear': monthYear,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
   /// Processes all pending payroll in bulk using a Firestore WriteBatch.
   /// Returns the number of records updated.
   static Future<int> processBulkPayments({
@@ -395,18 +536,22 @@ class PayrollService {
     required String adminUid,
   }) async {
     // Fetch pending docs once (not via stream) for batch write
-    final snap = await _db
-        .collectionGroup('months')
-        .where('monthYear', isEqualTo: monthYear)
-        .where('status', isEqualTo: 'pending')
-        .get();
+    final allMonths = await _db.collectionGroup('months').get();
+    final pendingDocs = allMonths.docs
+        .where((doc) {
+          final data = doc.data();
+          final docMonth = ((data['monthYear'] as String?) ?? '').toLowerCase();
+          final status = ((data['status'] as String?) ?? '').toLowerCase();
+          return docMonth == monthYear.toLowerCase() && status == 'pending';
+        })
+        .toList(growable: false);
 
-    if (snap.docs.isEmpty) return 0;
+    if (pendingDocs.isEmpty) return 0;
 
     final batch = _db.batch();
     final now = Timestamp.now();
 
-    for (final doc in snap.docs) {
+    for (final doc in pendingDocs) {
       batch.update(doc.reference, {
         'status': 'paid',
         'processedBy': adminUid,
@@ -421,16 +566,16 @@ class PayrollService {
     await _db.collection('activityLog').add({
       'type': 'payroll',
       'message':
-          'Bulk payroll processed for $monthYear · ${snap.docs.length} employees paid',
+          'Bulk payroll processed for $monthYear · ${pendingDocs.length} employees paid',
       'processedBy': adminUid,
       'monthYear': monthYear,
-      'count': snap.docs.length,
+      'count': pendingDocs.length,
       'timestamp': now,
     });
 
     // Notify each employee
     final label = monthDocIdToLabel(monthYear);
-    final futures = snap.docs.map((doc) async {
+    final futures = pendingDocs.map((doc) async {
       final employeeUid = doc.reference.parent.parent?.id ?? '';
       if (employeeUid.isEmpty) return;
       final net = (doc.data()['netSalary'] as num?)?.toDouble() ?? 0;
@@ -450,7 +595,7 @@ class PayrollService {
 
     await Future.wait(futures);
 
-    return snap.docs.length;
+    return pendingDocs.length;
   }
 
   /// Sends payroll reminder to admin in last 3 days of month when pending exists.
@@ -461,13 +606,17 @@ class PayrollService {
     if (now.day < 28) return;
 
     final monthYear = monthDocId(DateTime(now.year, now.month, 1));
-    final pendingSnap = await _db
-        .collectionGroup('months')
-        .where('monthYear', isEqualTo: monthYear)
-        .where('status', isEqualTo: 'pending')
-        .get();
+    final allMonths = await _db.collectionGroup('months').get();
+    final pendingDocs = allMonths.docs
+        .where((doc) {
+          final data = doc.data();
+          final docMonth = ((data['monthYear'] as String?) ?? '').toLowerCase();
+          final status = ((data['status'] as String?) ?? '').toLowerCase();
+          return docMonth == monthYear.toLowerCase() && status == 'pending';
+        })
+        .toList(growable: false);
 
-    if (pendingSnap.docs.isEmpty) return;
+    if (pendingDocs.isEmpty) return;
 
     final reminderDate =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -486,7 +635,7 @@ class PayrollService {
     await NotificationService.send(
       userId: adminUid,
       title: 'Payroll Reminder',
-      message: '${pendingSnap.docs.length} employees pending payroll',
+      message: '${pendingDocs.length} employees pending payroll',
       subtitle: monthLabel,
       type: NotificationService.typePayrollReminder,
       relatedId: monthYear,
