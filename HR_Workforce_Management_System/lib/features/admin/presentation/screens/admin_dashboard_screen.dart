@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../assistant/presentation/widgets/eqbot_chat_sheet.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../widgets/admin_navigation.dart';
@@ -38,6 +39,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(authControllerProvider).user;
+    final userId =
+        currentUser?.id ?? FirebaseAuth.instance.currentUser?.uid ?? '';
     final userName = currentUser?.name.trim().isNotEmpty == true
         ? currentUser!.name.trim()
         : 'HR Admin';
@@ -73,6 +76,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'admin_eqbot_fab',
+        onPressed: () => EqBotChatSheet.open(context, userId: userId),
+        backgroundColor: AdminColors.primary,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _AdminBottomBar(
         currentSection: _currentSection,
         onSectionSelected: _selectSection,

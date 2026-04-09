@@ -58,3 +58,7 @@ firebase-debug.*.log
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
+
+# Local OpenAI/assistant environment files
+env.local.json
+env.*.local.json

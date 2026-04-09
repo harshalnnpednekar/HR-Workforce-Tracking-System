@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../assistant/presentation/widgets/eqbot_chat_sheet.dart';
 import 'employee_attendance_screen.dart';
 import 'employee_home_screen.dart';
 import 'employee_leaves_screen.dart';
@@ -89,18 +90,14 @@ class _EmployeeDashboardScreenState
           ],
         ),
       ),
-      floatingActionButton: _selectedIndex == 2
-          ? FloatingActionButton(
-              onPressed: () => showActionMessage(
-                context,
-                'Create leave request coming next.',
-              ),
-              backgroundColor: AppColors.primary,
-              shape: const CircleBorder(),
-              child: const Icon(Icons.add, color: Colors.white, size: 34),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'employee_eqbot_fab',
+        onPressed: () => EqBotChatSheet.open(context, userId: userId),
+        backgroundColor: AppColors.primary,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _EmployeeBottomNavigation(
         items: _navItems,
         selectedIndex: _selectedIndex,
