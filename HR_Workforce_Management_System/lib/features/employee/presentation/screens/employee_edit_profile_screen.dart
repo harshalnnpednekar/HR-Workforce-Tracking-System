@@ -112,7 +112,11 @@ class _EmployeeEditProfileScreenState extends ConsumerState<EmployeeEditProfileS
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: InnerPageHeader(title: 'Edit Profile', userId: FirebaseAuth.instance.currentUser?.uid),
+              child: InnerPageHeader(
+                title: 'Edit Profile',
+                userId: FirebaseAuth.instance.currentUser?.uid,
+                showBackButton: true,
+              ),
             ),
             Expanded(
               child: _isLoading 

@@ -77,15 +77,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ],
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 60),
-        child: FloatingActionButton(
-          heroTag: 'admin_eqbot_fab',
-          onPressed: () => EqBotChatSheet.open(context, userId: userId),
-          backgroundColor: AdminColors.primary,
-          shape: const CircleBorder(),
-          child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
-        ),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'admin_eqbot_fab',
+        onPressed: () => EqBotChatSheet.open(context, userId: userId),
+        backgroundColor: AdminColors.primary,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _AdminBottomBar(

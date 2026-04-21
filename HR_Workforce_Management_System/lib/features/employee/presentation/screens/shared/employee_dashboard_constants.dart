@@ -142,35 +142,47 @@ class _NotificationsPageWrapper extends StatelessWidget {
   }
 }
 
-/// Inner page header with back button, title, and bell icon
+/// Inner page header with optional back button, title, and bell icon
 class InnerPageHeader extends StatelessWidget {
   const InnerPageHeader({
     super.key,
     required this.title,
     this.userId,
     this.icon,
+    this.showBackButton = false,
   });
 
   final String title;
   final String? userId;
   final IconData? icon;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        GestureDetector(
-          onTap: () => Navigator.of(context).maybePop(),
-          child: const Icon(
-            Icons.arrow_back_rounded,
-            color: Color(0xFF3B4C69),
-            size: 34,
+        if (showBackButton) ...[
+          GestureDetector(
+            onTap: () => Navigator.of(context).maybePop(),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: Color(0xFF3B4C69),
+              size: 34,
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
+          const SizedBox(width: 12),
+        ],
         if (icon != null) ...[
-          Icon(icon, color: AppColors.primary, size: 28),
-          const SizedBox(width: 10),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFF1DF),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 26),
+          ),
+          const SizedBox(width: 12),
         ],
         Expanded(
           child: Text(
@@ -179,11 +191,20 @@ class InnerPageHeader extends StatelessWidget {
             style: GoogleFonts.outfit(
               color: AppColors.title,
               fontWeight: FontWeight.w700,
-              fontSize: 26,
+              fontSize: 24,
             ),
           ),
         ),
-        SizedBox(width: 36, child: BellIcon(userId: userId)),
+
+        Container(
+          width: 52,
+          height: 52,
+          decoration: const BoxDecoration(
+            color: Color(0xFFE8ECF4),
+            shape: BoxShape.circle,
+          ),
+          child: Center(child: BellIcon(userId: userId)),
+        ),
       ],
     );
   }
