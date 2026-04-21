@@ -269,34 +269,31 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final body = _todayStream != null
-        ? StreamBuilder<AdminAttendanceDayData>(
-            stream: _todayStream,
-            builder: (context, snapshot) {
-              if (snapshot.hasData) {
-                return RefreshIndicator(
-                  onRefresh: _onRefresh,
-                  child: _buildContent(snapshot.data!),
-                );
-              }
-              if (snapshot.hasError) {
-                return _buildError();
-              }
-              return _buildLoader();
-            },
-          )
-        : FutureBuilder<AdminAttendanceDayData>(
-            future: _dayFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+    return RefreshIndicator(
+      onRefresh: _onRefresh,
+      child: _todayStream != null
+          ? StreamBuilder<AdminAttendanceDayData>(
+              stream: _todayStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return _buildContent(snapshot.data!);
+                }
+                if (snapshot.hasError) {
+                  return _buildError();
+                }
                 return _buildLoader();
-              }
-              if (snapshot.hasError) {
-                return _buildError();
-              }
-              return RefreshIndicator(
-                onRefresh: _onRefresh,
-                child: _buildContent(
+              },
+            )
+          : FutureBuilder<AdminAttendanceDayData>(
+              future: _dayFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return _buildLoader();
+                }
+                if (snapshot.hasError) {
+                  return _buildError();
+                }
+                return _buildContent(
                   snapshot.data ??
                       AdminAttendanceDayData(
                         selectedDate: _selectedDate,
@@ -307,18 +304,21 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                         logs: const [],
                         departments: const [],
                       ),
-                ),
-              );
-            },
-          );
-
-    return body;
+                );
+              },
+            ),
+    );
   }
 
   Widget _buildLoader() {
-    return const Padding(
-      padding: EdgeInsets.only(top: 120),
-      child: Center(child: CircularProgressIndicator()),
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: const [
+        Padding(
+          padding: EdgeInsets.only(top: 120),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ],
     );
   }
 
@@ -353,7 +353,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 160),
       children: [
         Row(
           children: [
@@ -540,50 +540,53 @@ class _MonthCalendarCard extends StatelessWidget {
                 .toList(),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            runSpacing: 8,
-            children: List.generate(42, (index) {
-              final day = index - lead + 1;
-              final inMonth = day >= 1 && day <= monthDays;
-              final date = DateTime(
-                focusedMonth.year,
-                focusedMonth.month,
-                inMonth ? day : 1,
-              );
-              final selected = inMonth && _sameDate(date, selectedDate);
+          Column(
+            children: List.generate(6, (weekIndex) {
+              return Row(
+                children: List.generate(7, (dayIndex) {
+                  final index = weekIndex * 7 + dayIndex;
+                  final day = index - lead + 1;
+                  final inMonth = day >= 1 && day <= monthDays;
+                  final date = DateTime(
+                    focusedMonth.year,
+                    focusedMonth.month,
+                    inMonth ? day : 1,
+                  );
+                  final selected = inMonth && _sameDate(date, selectedDate);
 
-              return SizedBox(
-                width: (MediaQuery.sizeOf(context).width - 84) / 7,
-                child: Center(
-                  child: inMonth
-                      ? InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () => onSelectDate(date),
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? AdminColors.primary
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '$day',
-                              style: TextStyle(
-                                color: selected
-                                    ? Colors.white
-                                    : AdminColors.text,
-                                fontWeight: selected
-                                    ? FontWeight.w800
-                                    : FontWeight.w600,
+                  return Expanded(
+                    child: Center(
+                      child: inMonth
+                          ? InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () => onSelectDate(date),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? AdminColors.primary
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '$day',
+                                  style: TextStyle(
+                                    color: selected
+                                        ? Colors.white
+                                        : AdminColors.text,
+                                    fontWeight: selected
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        )
-                      : const SizedBox(height: 36),
-                ),
+                            )
+                          : const SizedBox(height: 36),
+                    ),
+                  );
+                }),
               );
             }),
           ),
@@ -612,37 +615,62 @@ class _StatGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.7,
+    return Column(
       children: [
-        _StatCard(
-          label: 'PRESENT',
-          value: present,
-          bg: const Color(0xFFDDF5E8),
-          fg: const Color(0xFF0A7A4A),
+        Row(
+          children: [
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1.7,
+                child: _StatCard(
+                  label: 'PRESENT',
+                  value: present,
+                  bg: const Color(0xFFDDF5E8),
+                  fg: const Color(0xFF0A7A4A),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1.7,
+                child: _StatCard(
+                  label: 'LATE',
+                  value: late,
+                  bg: const Color(0xFFFFF3D6),
+                  fg: const Color(0xFFB15C00),
+                ),
+              ),
+            ),
+          ],
         ),
-        _StatCard(
-          label: 'LATE',
-          value: late,
-          bg: const Color(0xFFFFF3D6),
-          fg: const Color(0xFFB15C00),
-        ),
-        _StatCard(
-          label: 'ABSENT',
-          value: absent,
-          bg: const Color(0xFFFFE6EA),
-          fg: const Color(0xFFB1123D),
-        ),
-        _StatCard(
-          label: 'ON LEAVE',
-          value: onLeave,
-          bg: const Color(0xFFE8EDFF),
-          fg: const Color(0xFF3442B7),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1.7,
+                child: _StatCard(
+                  label: 'ABSENT',
+                  value: absent,
+                  bg: const Color(0xFFFFE6EA),
+                  fg: const Color(0xFFB1123D),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1.7,
+                child: _StatCard(
+                  label: 'ON LEAVE',
+                  value: onLeave,
+                  bg: const Color(0xFFE8EDFF),
+                  fg: const Color(0xFF3442B7),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

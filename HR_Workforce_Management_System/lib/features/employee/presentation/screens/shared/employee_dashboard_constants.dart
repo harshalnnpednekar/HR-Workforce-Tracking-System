@@ -144,10 +144,16 @@ class _NotificationsPageWrapper extends StatelessWidget {
 
 /// Inner page header with back button, title, and bell icon
 class InnerPageHeader extends StatelessWidget {
-  const InnerPageHeader({super.key, required this.title, this.userId});
+  const InnerPageHeader({
+    super.key,
+    required this.title,
+    this.userId,
+    this.icon,
+  });
 
   final String title;
   final String? userId;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -162,10 +168,14 @@ class InnerPageHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
+        if (icon != null) ...[
+          Icon(icon, color: AppColors.primary, size: 28),
+          const SizedBox(width: 10),
+        ],
         Expanded(
           child: Text(
             title,
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.start,
             style: GoogleFonts.outfit(
               color: AppColors.title,
               fontWeight: FontWeight.w700,
@@ -178,6 +188,7 @@ class InnerPageHeader extends StatelessWidget {
     );
   }
 }
+
 
 /// Field label for forms
 class FieldLabel extends StatelessWidget {

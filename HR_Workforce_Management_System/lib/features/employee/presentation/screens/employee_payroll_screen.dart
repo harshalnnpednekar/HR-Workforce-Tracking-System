@@ -4,10 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:printing/printing.dart';
+
 import '../../../../core/services/attendance_report_pdf_service.dart';
 import '../../../../core/services/leave_report_pdf_service.dart';
 import '../../../../core/services/payslip_pdf_service.dart';
 import '../../../../core/services/payroll_service.dart';
+import '../../../../core/services/admin_report_service.dart';
 import 'shared/employee_dashboard_constants.dart';
 
 enum _PayrollTabType { currentMonth, taxInfo, documents }
@@ -1071,15 +1074,92 @@ class _DocumentsTab extends StatelessWidget {
         const SizedBox(height: 14),
         const _DocumentsSection(
           title: 'HR Policy Documents',
-          child: _SimpleDocsList(
-            labels: [
-              'Company Leave Policy',
-              'HR Guidelines',
-              'Code of Conduct',
-            ],
-          ),
+          child: _HrPolicyDocsList(),
         ),
       ],
+    );
+  }
+}
+
+
+
+
+class _HrPolicyDocsList extends StatelessWidget {
+  const _HrPolicyDocsList();
+
+  Future<void> _generatePolicyPdf(BuildContext context, String title, String summary) async {
+    showActionMessage(context, 'Preparing $title...');
+
+    try {
+      final pdfBytes = await AdminReportService.generateHrPolicyPdf(title, summary);
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: const Text('Choose an action for this policy document.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Printing.layoutPdf(onLayout: (_) => pdfBytes, name: '${title.replaceAll(' ', '_')}.pdf');
+              },
+              child: const Text('PREVIEW', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Printing.sharePdf(bytes: pdfBytes, filename: '${title.replaceAll(' ', '_')}.pdf');
+              },
+              child: const Text('DOWNLOAD / SHARE', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showActionMessage(context, 'Error generating PDF: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const policies = [
+      (
+        'Leave Entitlement Policy',
+        'Annual, sick and parental leave allocations for all staff.'
+      ),
+      (
+        'Attendance & Punctuality',
+        'Working hours, grace period, and review workflow.'
+      ),
+      (
+        'Remote Work Guidelines',
+        'Eligibility, approval process and equipment responsibilities.'
+      ),
+      (
+        'Code of Conduct',
+        'Workplace behavior and grievance standards.'
+      ),
+    ];
+
+    return BaseCard(
+      child: Column(
+        children: policies.map((p) {
+          final isLast = policies.indexOf(p) == policies.length - 1;
+          return Column(
+            children: [
+              _ReportDocRow(
+                icon: Icons.description_outlined,
+                label: p.$1,
+                onDownload: () => _generatePolicyPdf(context, p.$1, p.$2),
+              ),
+              if (!isLast) const Divider(height: 18, color: AppColors.cardBorder),
+            ],
+          );
+        }).toList(),
+      ),
     );
   }
 }

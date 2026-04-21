@@ -85,7 +85,10 @@ class _EmployeeAttendancePageState extends State<EmployeeAttendancePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const InnerPageHeader(title: 'Attendance Tracking'),
+          InnerPageHeader(
+            title: 'Attendance Tracking',
+            icon: Icons.fact_check_rounded,
+          ),
           const SizedBox(height: 18),
           _AttendanceCalendarCard(
             focusedMonth: _focusedMonth,

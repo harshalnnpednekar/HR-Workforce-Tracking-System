@@ -447,6 +447,102 @@ class AdminReportService {
     return pdf.save();
   }
 
+  // ─── HR Policy PDF ───────────────────────────────────────────────────────
+
+  static Future<Uint8List> generateHrPolicyPdf(String title, String summary) async {
+    final pdf = pw.Document();
+
+    // Detailed content based on title
+    String detailedContent = '';
+    List<List<String>> tableData = [];
+    List<String> tableHeaders = [];
+
+    if (title.contains('Leave')) {
+      detailedContent = 'This policy outlines the leave entitlements for all full-time employees at Equitec Technologies. Employees are encouraged to plan their leaves in advance and obtain necessary approvals through the HR portal.';
+      tableHeaders = ['Leave Type', 'Allocation', 'Carry Forward', 'Description'];
+      tableData = [
+        ['Annual Leave', '20 Days', 'Max 5 Days', 'Vacation and personal time.'],
+        ['Sick Leave', '10 Days', 'None', 'Medical emergencies and recovery.'],
+        ['Parental Leave', 'As per Law', 'N/A', 'Maternity/Paternity benefits.'],
+        ['Bereavement', '3 Days', 'None', 'Family emergency leave.'],
+      ];
+    } else if (title.contains('Attendance')) {
+      detailedContent = 'Equitec Technologies maintains a professional work environment with flexible but disciplined timing. This document details the attendance tracking, punctuality standards, and the review process.';
+      tableHeaders = ['Category', 'Details', 'Impact'];
+      tableData = [
+        ['Work Hours', '09:00 AM - 06:00 PM', 'Standard Shift'],
+        ['Grace Period', '15 Minutes', 'Up to 09:15 AM'],
+        ['Late Marking', 'After 09:15 AM', '3 Lates = 1 Day Deduction'],
+        ['Half Day', 'After 12:00 PM', '0.5 Day Count'],
+      ];
+    } else if (title.contains('Remote')) {
+      detailedContent = 'To support work-life balance, Equitec provides remote work options for eligible roles. This policy ensures productivity is maintained while working outside the traditional office setting.';
+      tableHeaders = ['Component', 'Requirement', 'Responsibility'];
+      tableData = [
+        ['Eligibility', '6+ Months Tenure', 'Employee'],
+        ['Request Mode', 'Portal Submission', 'Employee'],
+        ['Equipment', 'Company Laptop', 'Equitec IT'],
+        ['Internet', 'High-speed Connection', 'Employee'],
+      ];
+    } else {
+      detailedContent = 'The Code of Conduct defines the expectations we have for our employees in terms of their behavior towards colleagues, supervisors, and the organization as a whole.';
+      tableHeaders = ['Standard', 'Expecation', 'Non-Compliance'];
+      tableData = [
+        ['Professionalism', 'Respectful communication', 'Warning'],
+        ['Integrity', 'Honest work reporting', 'Termination'],
+        ['Harassment', 'Zero Tolerance', 'Immediate Dismissal'],
+        ['Escalation', 'HR Reporting', 'Internal Review'],
+      ];
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        header: (context) => _buildHeader('Official HR Policy', title),
+        footer: (context) => _buildFooter(),
+        build: (context) => [
+          pw.Header(level: 1, text: 'Policy Summary', textStyle: pw.TextStyle(color: _orangeAccent, fontWeight: pw.FontWeight.bold, fontSize: 18)),
+          pw.Paragraph(
+            text: summary,
+            style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700, fontStyle: pw.FontStyle.italic),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Header(level: 1, text: 'Policy Details & Guidelines', textStyle: pw.TextStyle(color: _orangeAccent, fontWeight: pw.FontWeight.bold, fontSize: 18)),
+          pw.Paragraph(
+            text: detailedContent,
+            style: const pw.TextStyle(fontSize: 11, lineSpacing: 2),
+          ),
+          pw.SizedBox(height: 20),
+          if (tableData.isNotEmpty) ...[
+            pw.TableHelper.fromTextArray(
+              headers: tableHeaders,
+              data: tableData,
+              headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold),
+              headerDecoration: pw.BoxDecoration(color: _orangeAccent),
+              cellAlignment: pw.Alignment.centerLeft,
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              border: pw.TableBorder.all(color: PdfColors.grey300),
+            ),
+          ],
+          pw.SizedBox(height: 30),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.orange50,
+              border: pw.Border.all(color: _orangeAccent, width: 0.5),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+            ),
+            child: pw.Text(
+              'Disclaimer: This is a strictly confidential document intended for Equitec Technologies employees only. Unauthorized distribution is prohibited.',
+              style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: _orangeAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return pdf.save();
+  }
+
   // ─── Shared Layout Components ──────────────────────────────────────────
 
   static pw.Widget _buildHeader(String title, String subtitle) {

@@ -5,8 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:printing/printing.dart';
+
 import '../../../../core/services/attendance_service.dart';
 import '../../../../core/services/user_service.dart';
+import '../../../../core/services/admin_report_service.dart';
 import 'employee_edit_profile_screen.dart';
 import 'shared/employee_dashboard_constants.dart';
 
@@ -333,6 +336,17 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
               return _RecentActivityCard(records: snapshot.data ?? const []);
             },
           ),
+          const SizedBox(height: 28),
+          Text(
+            'Official HR Policies',
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: AppColors.title,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const _HrPoliciesSection(),
         ],
       ),
     );
@@ -873,6 +887,122 @@ class _RecentItem extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HrPoliciesSection extends StatelessWidget {
+  const _HrPoliciesSection();
+
+  Future<void> _generatePolicyPdf(BuildContext context, String title, String summary) async {
+    showActionMessage(context, 'Preparing $title...');
+
+    try {
+      final pdfBytes = await AdminReportService.generateHrPolicyPdf(title, summary);
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: const Text('Choose an action for this policy document.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Printing.layoutPdf(onLayout: (_) => pdfBytes, name: '${title.replaceAll(' ', '_')}.pdf');
+              },
+              child: const Text('PREVIEW', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Printing.sharePdf(bytes: pdfBytes, filename: '${title.replaceAll(' ', '_')}.pdf');
+              },
+              child: const Text('DOWNLOAD / SHARE', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showActionMessage(context, 'Error generating PDF: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const policies = [
+      (
+        'Leave Entitlement Policy',
+        'Annual, sick and parental leave allocations for all staff.',
+        Icons.event_note_rounded
+      ),
+      (
+        'Attendance & Punctuality',
+        'Working hours, grace period, and review workflow.',
+        Icons.fact_check_rounded
+      ),
+      (
+        'Remote Work Guidelines',
+        'Eligibility, approval process and equipment responsibilities.',
+        Icons.laptop_mac_rounded
+      ),
+      (
+        'Code of Conduct',
+        'Workplace behavior and grievance standards.',
+        Icons.gavel_rounded
+      ),
+    ];
+
+    return Column(
+      children: policies.map((p) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: InkWell(
+            onTap: () => _generatePolicyPdf(context, p.$1, p.$2),
+            borderRadius: BorderRadius.circular(22),
+            child: BaseCard(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1DF),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(p.$3, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.$1,
+                          style: GoogleFonts.outfit(
+                            color: AppColors.title,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 17,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          p.$2,
+                          style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.download_rounded, color: AppColors.primary, size: 20),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

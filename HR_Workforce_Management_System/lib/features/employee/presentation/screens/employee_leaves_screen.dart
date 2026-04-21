@@ -51,7 +51,10 @@ class _EmployeeLeavesPageState extends State<EmployeeLeavesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const InnerPageHeader(title: 'Leave Management'),
+          InnerPageHeader(
+            title: 'Leave Management',
+            icon: Icons.event_note_rounded,
+          ),
           const SizedBox(height: 20),
           _LeaveBalanceSection(balancesFuture: _balancesFuture),
           const SizedBox(height: 20),

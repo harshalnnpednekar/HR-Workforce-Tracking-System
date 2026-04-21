@@ -68,7 +68,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
-                child: KeyedSubtree(
+                child: SizedBox.expand(
                   key: ValueKey(_currentSection),
                   child: _buildCurrentPage(),
                 ),

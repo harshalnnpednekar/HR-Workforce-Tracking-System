@@ -1,9 +1,50 @@
 import 'package:flutter/material.dart';
-
+import 'package:printing/printing.dart';
 import '../widgets/admin_ui_kit.dart';
+import '../../../../core/services/admin_report_service.dart';
 
 class AdminHrPolicyScreen extends StatelessWidget {
   const AdminHrPolicyScreen({super.key});
+
+  Future<void> _generatePolicyPdf(BuildContext context, String title, String summary) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Preparing $title...'), duration: const Duration(seconds: 2)),
+    );
+
+    try {
+      final pdfBytes = await AdminReportService.generateHrPolicyPdf(title, summary);
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: const Text('Choose an action for this policy document.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Printing.layoutPdf(onLayout: (_) => pdfBytes, name: '${title.replaceAll(' ', '_')}.pdf');
+              },
+              child: const Text('PREVIEW', style: TextStyle(color: AdminColors.primary)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Printing.sharePdf(bytes: pdfBytes, filename: '${title.replaceAll(' ', '_')}.pdf');
+              },
+              child: const Text('SHARE / DOWNLOAD', style: TextStyle(color: AdminColors.primary)),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,14 +61,12 @@ class AdminHrPolicyScreen extends StatelessWidget {
       ),
       _PolicyItem(
         title: 'Remote Work Guidelines',
-        summary:
-            'Eligibility, approval process and equipment responsibilities.',
+        summary: 'Eligibility, approval process and equipment responsibilities.',
         updatedAt: 'Updated 2 weeks ago',
       ),
       _PolicyItem(
         title: 'Code of Conduct',
-        summary:
-            'Behavior, grievance escalation and workplace conduct standards.',
+        summary: 'Behavior, grievance escalation and workplace conduct standards.',
         updatedAt: 'Updated 3 weeks ago',
       ),
     ];
@@ -59,6 +98,7 @@ class AdminHrPolicyScreen extends StatelessWidget {
             (policy) => Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: AdminSurfaceCard(
+                onTap: () => _generatePolicyPdf(context, policy.title, policy.summary),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
