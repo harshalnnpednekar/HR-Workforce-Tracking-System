@@ -455,30 +455,33 @@ class _DailyLogAndWeeklyCard extends StatelessWidget {
             final clockOut = _readTimestamp(record?['clockOut']);
             final totalHours = _recordHours(record, clockIn, clockOut);
 
-            return Row(
-              children: [
-                Expanded(
-                  child: _AttendanceInfoBox(
-                    title: 'FIRST LOGIN',
-                    value: _formatTime(clockIn),
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _AttendanceInfoBox(
+                      title: 'FIRST LOGIN',
+                      value: _formatTime(clockIn),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _AttendanceInfoBox(
-                    title: 'LAST LOGOUT',
-                    value: _formatTime(clockOut),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _AttendanceInfoBox(
+                      title: 'LAST LOGOUT',
+                      value: _formatTime(clockOut),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _AttendanceInfoBox(
-                    title: 'EFFECTIVE',
-                    value: _formatHours(totalHours),
-                    highlighted: true,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _AttendanceInfoBox(
+                      title: 'EFFECTIVE',
+                      value: _formatHours(totalHours),
+                      highlighted: true,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -487,16 +490,19 @@ class _DailyLogAndWeeklyCard extends StatelessWidget {
           child: Column(
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Weekly Performance',
-                    style: GoogleFonts.outfit(
-                      color: AppColors.title,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 24,
+                  Expanded(
+                    child: Text(
+                      'Weekly Performance',
+                      style: GoogleFonts.outfit(
+                        color: AppColors.title,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 24,
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -651,6 +657,7 @@ class _WeekBarChart extends StatelessWidget {
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
+                    reservedSize: 38,
                     getTitlesWidget: (value, meta) {
                       const labels = [
                         'MON',

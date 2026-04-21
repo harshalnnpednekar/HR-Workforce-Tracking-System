@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../widgets/admin_ui_kit.dart';
+import 'admin_edit_profile_screen.dart';
+import 'admin_change_password_screen.dart';
+import 'admin_app_settings_screen.dart';
+import 'admin_help_support_screen.dart';
 
 class AdminProfileScreen extends ConsumerWidget {
   const AdminProfileScreen({super.key});
@@ -62,7 +66,7 @@ class AdminProfileScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 4),
-              Center(child: _ProfileAvatar(name: fullName)),
+              Center(child: _ProfileAvatar(name: fullName, photoUrl: currentUser?.photoUrl)),
               const SizedBox(height: 16),
               Center(
                 child: Text(
@@ -112,30 +116,46 @@ class AdminProfileScreen extends ConsumerWidget {
               const SizedBox(height: 18),
               const _SectionLabel(label: 'ACCOUNT SETTINGS'),
               const SizedBox(height: 10),
-              const _ProfileActionTile(
+              _ProfileActionTile(
                 icon: Icons.person,
                 title: 'Edit Profile',
                 subtitle: 'Update your personal information',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminEditProfileScreen()),
+                ),
               ),
               const SizedBox(height: 8),
-              const _ProfileActionTile(
+              _ProfileActionTile(
                 icon: Icons.lock,
                 title: 'Change Password',
                 subtitle: 'Manage your security credentials',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminChangePasswordScreen()),
+                ),
               ),
               const SizedBox(height: 18),
               const _SectionLabel(label: 'PREFERENCES'),
               const SizedBox(height: 10),
-              const _ProfileActionTile(
+              _ProfileActionTile(
                 icon: Icons.settings,
                 title: 'App Settings',
                 subtitle: 'Notifications, display, and more',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminAppSettingsScreen()),
+                ),
               ),
               const SizedBox(height: 8),
-              const _ProfileActionTile(
+              _ProfileActionTile(
                 icon: Icons.help,
                 title: 'Help & Support',
                 subtitle: 'FAQs and contact support',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminHelpSupportScreen()),
+                ),
               ),
               const SizedBox(height: 20),
               OutlinedButton.icon(
@@ -174,9 +194,10 @@ class AdminProfileScreen extends ConsumerWidget {
 }
 
 class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar({required this.name});
+  const _ProfileAvatar({required this.name, this.photoUrl});
 
   final String name;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -196,38 +217,53 @@ class _ProfileAvatar extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(40),
             border: Border.all(color: const Color(0xFFB0B8C5), width: 2),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFE7EBF1), Color(0xFFD6DCE6)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            image: photoUrl != null && photoUrl!.isNotEmpty
+                ? DecorationImage(image: NetworkImage(photoUrl!), fit: BoxFit.cover)
+                : null,
+            gradient: photoUrl != null && photoUrl!.isNotEmpty
+                ? null
+                : const LinearGradient(
+                    colors: [Color(0xFFE7EBF1), Color(0xFFD6DCE6)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
           ),
-          child: Center(
-            child: Text(
-              initials.isEmpty ? 'HR' : initials,
-              style: const TextStyle(
-                color: AdminColors.text,
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
+          child: photoUrl == null || photoUrl!.isEmpty
+              ? Center(
+                  child: Text(
+                    initials.isEmpty ? 'HR' : initials,
+                    style: const TextStyle(
+                      color: AdminColors.text,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                )
+              : null,
         ),
         Positioned(
           right: 0,
           bottom: 0,
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AdminColors.primary,
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: const Icon(
-              Icons.edit_rounded,
-              color: Colors.white,
-              size: 18,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminEditProfileScreen()),
+              );
+            },
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AdminColors.primary,
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: const Icon(
+                Icons.edit_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
             ),
           ),
         ),
@@ -260,55 +296,64 @@ class _ProfileActionTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return AdminSurfaceCard(
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFEFE6),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: AdminColors.primary),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AdminColors.text,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(4.0),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEFE6),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF7D8BA2),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: AdminColors.primary),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AdminColors.text,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Color(0xFF7D8BA2),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF9AA8BE)),
+            ],
           ),
-          const SizedBox(width: 12),
-          const Icon(Icons.chevron_right_rounded, color: Color(0xFF9AA8BE)),
-        ],
+        ),
       ),
     );
   }

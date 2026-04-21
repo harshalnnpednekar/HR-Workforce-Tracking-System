@@ -51,7 +51,7 @@ class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 56),
           elevation: 2,
-          shadowColor: royalPurple.withOpacity(0.3),
+          shadowColor: royalPurple.withValues(alpha: 0.3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),

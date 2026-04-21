@@ -15,6 +15,7 @@ import 'admin_hr_policy_screen.dart';
 import 'admin_leave_management_screen.dart';
 import 'admin_payroll_screen.dart';
 import 'admin_profile_screen.dart';
+import 'admin_edit_profile_screen.dart';
 import 'admin_reports_screen.dart';
 import 'notifications_screen.dart';
 
@@ -76,12 +77,15 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'admin_eqbot_fab',
-        onPressed: () => EqBotChatSheet.open(context, userId: userId),
-        backgroundColor: AdminColors.primary,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 60),
+        child: FloatingActionButton(
+          heroTag: 'admin_eqbot_fab',
+          onPressed: () => EqBotChatSheet.open(context, userId: userId),
+          backgroundColor: AdminColors.primary,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _AdminBottomBar(
@@ -219,25 +223,54 @@ class _AdminTopBar extends StatelessWidget {
             },
           ),
           const SizedBox(width: 10),
-          InkWell(
-            onTap: onProfileTap,
-            borderRadius: BorderRadius.circular(18),
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFE6D9),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              InkWell(
+                onTap: onProfileTap,
                 borderRadius: BorderRadius.circular(18),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                initials.isEmpty ? 'HR' : initials,
-                style: const TextStyle(
-                  color: AdminColors.text,
-                  fontWeight: FontWeight.w800,
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFE6D9),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initials.isEmpty ? 'HR' : initials,
+                    style: const TextStyle(
+                      color: AdminColors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                right: -4,
+                bottom: -2,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AdminEditProfileScreen()),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: AdminColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      color: Colors.white,
+                      size: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

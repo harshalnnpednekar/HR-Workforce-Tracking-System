@@ -33,6 +33,7 @@ class AdminAttendanceLogData {
     required this.clockOut,
     required this.totalHours,
     required this.hasNoLogs,
+    this.clockInLocation,
   });
 
   final String userId;
@@ -45,6 +46,7 @@ class AdminAttendanceLogData {
   final DateTime? clockOut;
   final double totalHours;
   final bool hasNoLogs;
+  final Map<String, dynamic>? clockInLocation;
 }
 
 class AdminAttendanceService {
@@ -176,11 +178,7 @@ class AdminAttendanceService {
     return snap.docs
         .map((doc) {
           final userId = doc.reference.parent.parent?.id;
-          return {
-            'id': doc.id,
-            if (userId != null) 'userId': userId,
-            ...doc.data(),
-          };
+          return {'id': doc.id, 'userId': ?userId, ...doc.data()};
         })
         .toList(growable: false);
   }
@@ -243,11 +241,13 @@ class AdminAttendanceService {
         dep,
         () => {'present': 0, 'late': 0, 'absent': 0},
       );
-      if (row.status == 'present')
+      if (row.status == 'present') {
         bucket['present'] = (bucket['present'] ?? 0) + 1;
+      }
       if (row.status == 'late') bucket['late'] = (bucket['late'] ?? 0) + 1;
-      if (row.status == 'absent')
+      if (row.status == 'absent') {
         bucket['absent'] = (bucket['absent'] ?? 0) + 1;
+      }
     }
 
     return {
@@ -348,6 +348,7 @@ class AdminAttendanceService {
               (data['totalHours'] as num?)?.toDouble() ??
               _hours(clockIn, clockOut),
           hasNoLogs: clockIn == null && clockOut == null,
+          clockInLocation: data['clockInLocation'] as Map<String, dynamic>?,
         ),
       );
     }

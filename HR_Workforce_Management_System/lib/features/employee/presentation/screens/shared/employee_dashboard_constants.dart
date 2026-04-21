@@ -24,6 +24,7 @@ void showActionMessage(BuildContext context, String message) {
 /// Reusable card container widget
 class BaseCard extends StatelessWidget {
   const BaseCard({
+    super.key,
     required this.child,
     this.padding = const EdgeInsets.all(18),
   });
@@ -49,7 +50,7 @@ class BaseCard extends StatelessWidget {
 /// Pass [userId] so the badge streams the real count.
 /// If [userId] is empty, falls back to a static red dot.
 class BellIcon extends StatelessWidget {
-  const BellIcon({this.userId});
+  const BellIcon({super.key, this.userId});
 
   final String? userId;
 
@@ -143,7 +144,7 @@ class _NotificationsPageWrapper extends StatelessWidget {
 
 /// Inner page header with back button, title, and bell icon
 class InnerPageHeader extends StatelessWidget {
-  const InnerPageHeader({required this.title, this.userId});
+  const InnerPageHeader({super.key, required this.title, this.userId});
 
   final String title;
   final String? userId;
@@ -180,7 +181,7 @@ class InnerPageHeader extends StatelessWidget {
 
 /// Field label for forms
 class FieldLabel extends StatelessWidget {
-  const FieldLabel({required this.text});
+  const FieldLabel({super.key, required this.text});
 
   final String text;
 
@@ -200,6 +201,7 @@ class FieldLabel extends StatelessWidget {
 /// Form field with TextFormField
 class FormFieldBox extends StatelessWidget {
   const FormFieldBox({
+    super.key,
     required this.hintText,
     this.trailing,
     this.height = 52,
@@ -243,7 +245,7 @@ class FormFieldBox extends StatelessWidget {
               ),
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );
@@ -252,7 +254,7 @@ class FormFieldBox extends StatelessWidget {
 
 /// Legend dot for calendar
 class LegendDot extends StatelessWidget {
-  const LegendDot({required this.label, required this.color});
+  const LegendDot({super.key, required this.label, required this.color});
 
   final String label;
   final Color color;

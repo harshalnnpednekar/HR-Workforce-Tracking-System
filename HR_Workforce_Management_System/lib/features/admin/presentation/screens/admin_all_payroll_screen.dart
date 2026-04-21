@@ -70,8 +70,9 @@ class _AdminAllPayrollScreenState extends State<AdminAllPayrollScreen> {
                   final bDate = PayrollService.monthDocIdToDate(
                     b.toLowerCase(),
                   );
-                  if (aDate != null && bDate != null)
+                  if (aDate != null && bDate != null) {
                     return bDate.compareTo(aDate);
+                  }
                   return b.compareTo(a);
                 });
 
@@ -80,8 +81,9 @@ class _AdminAllPayrollScreenState extends State<AdminAllPayrollScreen> {
               .where((row) {
                 final status = ((row['status'] as String?) ?? 'pending')
                     .toLowerCase();
-                if (_statusFilter != 'all' && status != _statusFilter)
+                if (_statusFilter != 'all' && status != _statusFilter) {
                   return false;
+                }
 
                 final monthYear = ((row['monthYear'] as String?) ?? '').trim();
                 if (_monthFilter != null &&

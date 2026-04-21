@@ -223,7 +223,6 @@ class _LoginTextField extends StatelessWidget {
     required this.hint,
     required this.prefixIcon,
     this.obscureText = false,
-    this.keyboardType,
     this.suffixIcon,
     this.validator,
   });
@@ -233,7 +232,6 @@ class _LoginTextField extends StatelessWidget {
   final String hint;
   final IconData prefixIcon;
   final bool obscureText;
-  final TextInputType? keyboardType;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
 
@@ -242,7 +240,6 @@ class _LoginTextField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       obscureText: obscureText,
-      keyboardType: keyboardType,
       validator: validator,
       decoration: InputDecoration(
         labelText: label,

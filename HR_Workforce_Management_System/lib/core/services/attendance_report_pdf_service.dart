@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -73,9 +70,6 @@ class AttendanceReportPdfService {
     );
 
     final bytes = await doc.save();
-    final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/attendance_report_${monthKey}_$uid.pdf');
-    await file.writeAsBytes(bytes, flush: true);
 
     await Printing.sharePdf(
       bytes: bytes,

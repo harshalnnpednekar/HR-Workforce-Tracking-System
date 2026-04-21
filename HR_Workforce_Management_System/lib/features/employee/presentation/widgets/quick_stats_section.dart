@@ -16,7 +16,7 @@ class QuickStatsSection extends StatelessWidget {
             'Quick Overview',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
             ),
           ),
         ),
@@ -29,7 +29,7 @@ class QuickStatsSection extends StatelessWidget {
                 title: 'Hours Today',
                 value: '04h 30m',
                 color: Colors.blue.shade400,
-                backgroundColor: Colors.blue.shade50.withOpacity(0.5),
+                backgroundColor: Colors.blue.shade50.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(width: 16),
@@ -39,7 +39,7 @@ class QuickStatsSection extends StatelessWidget {
                 title: 'Leave Balance',
                 value: '12 Days',
                 color: Colors.purple.shade400,
-                backgroundColor: Colors.purple.shade50.withOpacity(0.5),
+                backgroundColor: Colors.purple.shade50.withValues(alpha: 0.5),
               ),
             ),
           ],
@@ -51,7 +51,7 @@ class QuickStatsSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
               ),
@@ -141,7 +141,7 @@ class _StatTile extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200.withOpacity(0.5),
+            color: Colors.grey.shade200.withValues(alpha: 0.5),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

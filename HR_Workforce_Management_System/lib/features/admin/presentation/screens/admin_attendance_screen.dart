@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/services/admin_attendance_service.dart';
 import '../../../../core/services/user_service.dart';
@@ -136,8 +137,9 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                   clockOut: outDate,
                   adminUid: adminUid,
                 );
-                if (!mounted) return;
+                if (!context.mounted) return;
                 Navigator.of(context).pop();
+                if (!mounted) return;
                 setState(_reload);
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   const SnackBar(
@@ -174,7 +176,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: selectedUid,
+                      initialValue: selectedUid,
                       items: employees
                           .map(
                             (e) => DropdownMenuItem<String>(
@@ -190,7 +192,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: status,
+                      initialValue: status,
                       items: const [
                         DropdownMenuItem(
                           value: 'present',
@@ -272,7 +274,10 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
             stream: _todayStream,
             builder: (context, snapshot) {
               if (snapshot.hasData) {
-                return _buildContent(snapshot.data!);
+                return RefreshIndicator(
+                  onRefresh: _onRefresh,
+                  child: _buildContent(snapshot.data!),
+                );
               }
               if (snapshot.hasError) {
                 return _buildError();
@@ -289,29 +294,25 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
               if (snapshot.hasError) {
                 return _buildError();
               }
-              return _buildContent(
-                snapshot.data ??
-                    AdminAttendanceDayData(
-                      selectedDate: _selectedDate,
-                      present: 0,
-                      late: 0,
-                      absent: 0,
-                      onLeave: 0,
-                      logs: const [],
-                      departments: const [],
-                    ),
+              return RefreshIndicator(
+                onRefresh: _onRefresh,
+                child: _buildContent(
+                  snapshot.data ??
+                      AdminAttendanceDayData(
+                        selectedDate: _selectedDate,
+                        present: 0,
+                        late: 0,
+                        absent: 0,
+                        onLeave: 0,
+                        logs: const [],
+                        departments: const [],
+                      ),
+                ),
               );
             },
           );
 
-    return RefreshIndicator(
-      onRefresh: _onRefresh,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
-        child: body,
-      ),
-    );
+    return body;
   }
 
   Widget _buildLoader() {
@@ -348,8 +349,11 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
               .where((item) => item.department == _selectedDepartment)
               .toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ListView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 120),
       children: [
         Row(
           children: [
@@ -361,7 +365,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                     'Attendance Overview',
                     style: TextStyle(
                       color: AdminColors.text,
-                      fontSize: 34,
+                      fontSize: 28,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -369,8 +373,8 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                     'ADMIN PORTAL',
                     style: TextStyle(
                       color: Color(0xFF6B7F99),
-                      fontSize: 15,
-                      letterSpacing: 2,
+                      fontSize: 13,
+                      letterSpacing: 1.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -395,7 +399,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
         _MonthCalendarCard(
           focusedMonth: _focusedMonth,
           selectedDate: _selectedDate,
@@ -403,14 +407,14 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
           onNextMonth: () => _changeMonth(1),
           onSelectDate: _selectDate,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
         _StatGrid(
           present: vm.present,
           late: vm.late,
           absent: vm.absent,
           onLeave: vm.onLeave,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
         _DepartmentFilterRow(
           departments: availableDepartments,
           selectedDepartment: _selectedDepartment,
@@ -420,7 +424,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
             });
           },
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 24),
         Row(
           children: [
             const Expanded(
@@ -428,7 +432,7 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
                 'Attendance Logs',
                 style: TextStyle(
                   color: AdminColors.text,
-                  fontSize: 29,
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -437,13 +441,13 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
               DateFormat('EEE, d MMM').format(vm.selectedDate),
               style: const TextStyle(
                 color: AdminColors.primary,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         if (visibleLogs.isEmpty)
           const AdminSurfaceCard(
             child: Text(
@@ -712,7 +716,7 @@ class _DepartmentFilterRow extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: departments.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final value = departments[index];
           final selected = value == selectedDepartment;
@@ -786,7 +790,10 @@ class _AttendanceLogCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       const Icon(
                         Icons.login_rounded,
@@ -800,7 +807,21 @@ class _AttendanceLogCard extends StatelessWidget {
                             : DateFormat('hh:mm a').format(item.clockIn!),
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                      const SizedBox(width: 16),
+                      if (item.clockInLocation != null) ...[
+                        const SizedBox(width: 2),
+                        InkWell(
+                          onTap: () {
+                            final lat = item.clockInLocation!['lat'];
+                            final lng = item.clockInLocation!['lng'];
+                            launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'));
+                          },
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            size: 16,
+                            color: AdminColors.primary,
+                          ),
+                        ),
+                      ],
                       const Icon(
                         Icons.logout_rounded,
                         size: 16,
@@ -841,12 +862,15 @@ class _AttendanceLogCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  _durationLabel(item),
-                  style: const TextStyle(
-                    color: Color(0xFF8090A8),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                Flexible(
+                  child: Text(
+                    _durationLabel(item),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: Color(0xFF8090A8),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],
@@ -859,7 +883,7 @@ class _AttendanceLogCard extends StatelessWidget {
 
   String _durationLabel(AdminAttendanceLogData entry) {
     if (entry.status == 'absent') return '0h 00m';
-    if (entry.hasNoLogs) return 'No logs recorded for today';
+    if (entry.hasNoLogs) return 'No logs today';
 
     if (entry.totalHours > 0) {
       final h = entry.totalHours.floor();

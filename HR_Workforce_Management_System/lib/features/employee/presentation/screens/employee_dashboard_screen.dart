@@ -77,6 +77,7 @@ class _EmployeeDashboardScreenState
               userId: userId,
               onOpenLeaves: _goToLeaves,
               onOpenPayroll: _goToPayroll,
+              onOpenProfile: () => _onItemTapped(4),
             ),
             EmployeeAttendancePage(userId: userId),
             EmployeeLeavesPage(userId: userId),

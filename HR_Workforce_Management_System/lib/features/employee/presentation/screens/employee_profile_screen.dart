@@ -1,12 +1,7 @@
-import 'dart:io';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/services/attendance_service.dart';
@@ -14,6 +9,9 @@ import '../../../../core/services/leave_service.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/task_service.dart';
 import '../../../../core/services/user_service.dart';
+import '../../../admin/presentation/screens/notifications_screen.dart';
+import 'employee_edit_profile_screen.dart';
+import 'employee_change_password_screen.dart';
 import 'shared/employee_dashboard_constants.dart';
 
 class EmployeeProfilePage extends StatefulWidget {
@@ -36,7 +34,7 @@ class EmployeeProfilePage extends StatefulWidget {
 
 class _EmployeeProfilePageState extends State<EmployeeProfilePage> {
   late Future<_ProfileVm> _profileFuture;
-  bool _uploadingPhoto = false;
+
 
   @override
   void initState() {
@@ -104,55 +102,6 @@ class _EmployeeProfilePageState extends State<EmployeeProfilePage> {
     );
   }
 
-  Future<void> _pickAndUploadPhoto() async {
-    if (widget.userId.isEmpty || _uploadingPhoto) return;
-
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
-
-    setState(() {
-      _uploadingPhoto = true;
-    });
-
-    try {
-      final file = File(picked.path);
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('profilePhotos')
-          .child('${widget.userId}.jpg');
-      await ref.putFile(file);
-      final url = await ref.getDownloadURL();
-      await UserService.updateProfile(widget.userId, {'photoUrl': url});
-      if (!mounted) return;
-      setState(_load);
-      showActionMessage(context, 'Profile photo updated');
-    } on Exception catch (e) {
-      if (!mounted) return;
-      showActionMessage(context, e.toString().replaceAll('Exception: ', ''));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _uploadingPhoto = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _sendPasswordReset(String email) async {
-    if (email.isEmpty) {
-      showActionMessage(context, 'Email not available for password reset.');
-      return;
-    }
-
-    await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-    if (!mounted) return;
-    showActionMessage(context, 'Password reset email sent.');
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_ProfileVm>(
@@ -190,13 +139,21 @@ class _EmployeeProfilePageState extends State<EmployeeProfilePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ProfileHeaderBar(unreadNotifications: vm.unreadNotifications),
+              _ProfileHeaderBar(
+                unreadNotifications: vm.unreadNotifications,
+                userId: widget.userId,
+              ),
               const SizedBox(height: 16),
               _ProfileAvatar(
                 fullName: fullName,
                 photoUrl: photoUrl,
-                uploading: _uploadingPhoto,
-                onEditTap: _pickAndUploadPhoto,
+                uploading: false,
+                onEditTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EmployeeEditProfileScreen()),
+                  ).then((_) => setState(_load));
+                },
               ),
               const SizedBox(height: 10),
               Center(
@@ -260,8 +217,14 @@ class _EmployeeProfilePageState extends State<EmployeeProfilePage> {
               _DocumentsPayrollActions(onOpenPayroll: widget.onOpenPayroll),
               const SizedBox(height: 16),
               _SettingsList(
+                userId: widget.userId,
                 onLogoutTap: widget.onLogoutRequested,
-                onChangePasswordTap: () => _sendPasswordReset(email),
+                onChangePasswordTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EmployeeChangePasswordScreen()),
+                  );
+                },
               ),
             ],
           ),
@@ -314,9 +277,13 @@ class _ProfileVm {
 }
 
 class _ProfileHeaderBar extends StatelessWidget {
-  const _ProfileHeaderBar({required this.unreadNotifications});
+  const _ProfileHeaderBar({
+    required this.unreadNotifications,
+    required this.userId,
+  });
 
   final int unreadNotifications;
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
@@ -333,21 +300,33 @@ class _ProfileHeaderBar extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E4),
-                borderRadius: BorderRadius.circular(16),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => NotificationsScreen(
+                  userId: userId,
+                  isAdmin: false,
+                ),
               ),
-              child: const Icon(
-                Icons.notifications_rounded,
-                color: AppColors.primary,
+            );
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E4),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.notifications_rounded,
+                  color: AppColors.primary,
+                ),
               ),
-            ),
             if (unreadNotifications > 0)
               Positioned(
                 right: -4,
@@ -362,6 +341,7 @@ class _ProfileHeaderBar extends StatelessWidget {
                 ),
               ),
           ],
+        ),
         ),
       ],
     );
@@ -555,6 +535,9 @@ class _ProfileStatCardHours extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Assuming 160 hours as a monthly target for the progress bar
+    final progress = (hours / 160).clamp(0, 1).toDouble();
+    
     return BaseCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,7 +574,17 @@ class _ProfileStatCardHours extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: const Color(0xFFE8EDF5),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF3A7CE3)),
+            ),
+          ),
+          const SizedBox(height: 8),
           const Text(
             "This Month's Total",
             style: TextStyle(color: AppColors.muted),
@@ -994,10 +987,12 @@ class _SettingsList extends StatelessWidget {
   const _SettingsList({
     required this.onLogoutTap,
     required this.onChangePasswordTap,
+    required this.userId,
   });
 
   final VoidCallback onLogoutTap;
   final VoidCallback onChangePasswordTap;
+  final String userId;
 
   @override
   Widget build(BuildContext context) {
@@ -1023,9 +1018,20 @@ class _SettingsList extends StatelessWidget {
                 onTap: onChangePasswordTap,
               ),
               const Divider(height: 1, color: AppColors.cardBorder),
-              const _SettingRow(
+              _SettingRow(
                 icon: Icons.notifications_rounded,
                 label: 'Notifications',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NotificationsScreen(
+                        userId: userId,
+                        isAdmin: false,
+                      ),
+                    ),
+                  );
+                },
               ),
               const Divider(height: 1, color: AppColors.cardBorder),
               _SettingRow(

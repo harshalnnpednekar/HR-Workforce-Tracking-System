@@ -73,9 +73,9 @@ class _ModernChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(100),
             gradient: isSelected
-                ? LinearGradient(colors: [primary, primary.withOpacity(0.8)])
+                ? LinearGradient(colors: [primary, primary.withValues(alpha: 0.8)])
                 : null,
-            color: isSelected ? null : Colors.white.withOpacity(0.6),
+            color: isSelected ? null : Colors.white.withValues(alpha: 0.6),
             border: Border.all(
               color: isSelected ? primary : Colors.white,
               width: 1,
@@ -83,7 +83,7 @@ class _ModernChip extends StatelessWidget {
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: primary.withOpacity(0.3),
+                      color: primary.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),

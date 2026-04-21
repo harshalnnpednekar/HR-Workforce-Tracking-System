@@ -39,9 +39,9 @@ class ProfileHeader extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: SweepGradient(
                   colors: [
-                    Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                    Theme.of(context).colorScheme.secondary.withOpacity(0.5),
-                    Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    Theme.of(context).colorScheme.secondary.withValues(alpha: 0.5),
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
                   ],
                 ),
               ),
@@ -82,7 +82,7 @@ class ProfileHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(100),
           ),
           child: Text(

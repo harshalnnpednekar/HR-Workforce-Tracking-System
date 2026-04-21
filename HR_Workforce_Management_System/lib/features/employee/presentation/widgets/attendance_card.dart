@@ -55,12 +55,12 @@ class _AttendanceCardState extends ConsumerState<AttendanceCard> {
           end: Alignment.bottomRight,
           colors: [
             Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withOpacity(0.8),
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
           ],
         ),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -78,7 +78,7 @@ class _AttendanceCardState extends ConsumerState<AttendanceCard> {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -103,7 +103,7 @@ class _AttendanceCardState extends ConsumerState<AttendanceCard> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -123,7 +123,7 @@ class _AttendanceCardState extends ConsumerState<AttendanceCard> {
                                     (attendance.isCheckedIn
                                             ? Colors.orange
                                             : Colors.greenAccent)
-                                        .withOpacity(0.5),
+                                        .withValues(alpha: 0.5),
                                 blurRadius: 8,
                                 spreadRadius: 2,
                               ),
@@ -178,7 +178,7 @@ class _AttendanceCardState extends ConsumerState<AttendanceCard> {
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: attendance.isCheckedIn
-                            ? Colors.redAccent.withOpacity(0.9)
+                            ? Colors.redAccent.withValues(alpha: 0.9)
                             : Colors.white,
                         foregroundColor: attendance.isCheckedIn
                             ? Colors.white

@@ -70,7 +70,7 @@ class WorkforceHeatmap extends StatelessWidget {
                     horizontalInterval: 15,
                     getDrawingHorizontalLine: (value) {
                       return FlLine(
-                        color: Colors.grey.withOpacity(0.2),
+                        color: Colors.grey.withValues(alpha: 0.2),
                         strokeWidth: 1,
                       );
                     },

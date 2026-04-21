@@ -429,7 +429,7 @@ class PayrollService {
           userId: uid,
           title: 'Salary Credited',
           message: 'Your $label salary has been credited',
-          subtitle: '₹${_fmt(net)}',
+          subtitle: 'Rs. ${_fmt(net)}',
           type: NotificationService.typePayroll,
           relatedId: monthYear,
         );
@@ -584,7 +584,7 @@ class PayrollService {
           userId: employeeUid,
           title: 'Salary Credited',
           message: 'Your $label salary has been credited',
-          subtitle: '₹${_fmt(net)}',
+          subtitle: 'Rs. ${_fmt(net)}',
           type: NotificationService.typePayroll,
           relatedId: monthYear,
         );
@@ -645,7 +645,7 @@ class PayrollService {
 
   // ─── Formatting helpers ───────────────────────────────────────────────────
 
-  static String formatCurrency(num amount) => '₹${_fmt(amount.toDouble())}';
+  static String formatCurrency(num amount) => 'Rs. ${_fmt(amount.toDouble())}';
 
   static String _fmt(double amount) {
     // Simple Indian number formatting e.g. 1,23,456
@@ -660,7 +660,7 @@ class PayrollService {
       rem = rem.substring(0, rem.length - 2);
     }
     if (rem.isNotEmpty) groups.insert(0, rem);
-    return '${groups.join(',')},${last3}';
+    return '${groups.join(',')},$last3';
   }
 
   // ─── Available months ─────────────────────────────────────────────────────

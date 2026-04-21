@@ -1,8 +1,5 @@
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -149,7 +146,7 @@ class PayslipPdfService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   _detailColumn('Pay Period', payPeriod),
-                  _detailColumn('Payment Date', '${_getCurrentDayAndDate()}'),
+                  _detailColumn('Payment Date', _getCurrentDayAndDate()),
                   _detailColumn('', ''),
                 ],
               ),
@@ -438,20 +435,16 @@ class PayslipPdfService {
 
     final bytes = await doc.save();
 
-    final output = await getTemporaryDirectory();
-    final file = File('${output.path}/payslip_${monthYear}_$uid.pdf');
-    await file.writeAsBytes(bytes, flush: true);
-
     await Printing.sharePdf(
       bytes: bytes,
-      filename: 'Payslip_${employeeName}_${month}_${year}.pdf',
+      filename: 'Payslip_${employeeName}_${month}_$year.pdf',
     );
 
     try {
       final storageRef = FirebaseStorage.instance.ref().child(
         'payslips/$uid/$monthYear.pdf',
       );
-      await storageRef.putFile(file);
+      await storageRef.putData(bytes, SettableMetadata(contentType: 'application/pdf'));
       final downloadUrl = await storageRef.getDownloadURL();
 
       await _db
@@ -538,7 +531,7 @@ class PayslipPdfService {
 
   static String _formatInr(double amount) {
     final s = amount.toStringAsFixed(0);
-    if (s.length <= 3) return '₹$s';
+    if (s.length <= 3) return 'Rs. $s';
     final last3 = s.substring(s.length - 3);
     final remaining = s.substring(0, s.length - 3);
     final groups = <String>[];
@@ -550,6 +543,6 @@ class PayslipPdfService {
     if (rem.isNotEmpty) {
       groups.insert(0, rem);
     }
-    return '₹${groups.join(',')},$last3';
+    return 'Rs. ${groups.join(',')},$last3';
   }
 }

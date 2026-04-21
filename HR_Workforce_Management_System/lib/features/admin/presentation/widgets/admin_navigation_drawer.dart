@@ -61,7 +61,7 @@ class AdminNavigationDrawer extends StatelessWidget {
               child: ListView.separated(
                 padding: EdgeInsets.zero,
                 itemCount: drawerSections.length,
-                separatorBuilder: (_, __) => const Divider(
+                separatorBuilder: (_, _) => const Divider(
                   height: 1,
                   thickness: 1,
                   color: Color(0xFFF2F4F7),

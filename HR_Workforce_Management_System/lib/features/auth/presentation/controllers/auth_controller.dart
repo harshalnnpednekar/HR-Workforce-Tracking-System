@@ -65,4 +65,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = state.copyWith(user: user);
     }
   }
+
+  /// Alias for restoreSession to reload user data.
+  Future<void> loadUser() => restoreSession();
 }

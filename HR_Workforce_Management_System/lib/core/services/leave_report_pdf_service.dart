@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -88,9 +85,6 @@ class LeaveReportPdfService {
     );
 
     final bytes = await doc.save();
-    final temp = await getTemporaryDirectory();
-    final file = File('${temp.path}/leave_summary_$uid.pdf');
-    await file.writeAsBytes(bytes, flush: true);
 
     await Printing.sharePdf(
       bytes: bytes,
@@ -195,110 +189,96 @@ class LeaveReportPdfService {
     required int earnedUsed,
     required int earnedRemaining,
   }) {
-    final totalEntitlement =
-        casualEntitlement + sickEntitlement + earnedEntitlement;
-    final totalUsed = casualUsed + sickUsed + earnedUsed;
     final totalRemaining = casualRemaining + sickRemaining + earnedRemaining;
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         _sectionTitle('Leave Balance Overview'),
-        pw.SizedBox(height: 10),
-        pw.Table(
-          border: pw.TableBorder.all(
-            color: PdfColor.fromInt(0xFFE1E6ED),
-            width: 0.5,
-          ),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(2),
-            1: const pw.FlexColumnWidth(1.2),
-            2: const pw.FlexColumnWidth(1),
-            3: const pw.FlexColumnWidth(1),
-          },
+        pw.SizedBox(height: 12),
+        pw.Row(
           children: [
-            pw.TableRow(
-              decoration: pw.BoxDecoration(color: PdfColor.fromInt(0xFFF3F5F8)),
-              children: [
-                _th('LEAVE TYPE'),
-                _th('TOTAL ENTITLEMENT'),
-                _th('USED'),
-                _th('REMAINING'),
-              ],
+            _summaryTile(
+              'CASUAL',
+              '$casualRemaining',
+              PdfColor.fromInt(0xFFF8FAFC),
+              PdfColor.fromInt(0xFF1D2939),
+              sub: 'of $casualEntitlement',
             ),
-            _overviewRow(
-              'Casual Leave',
-              casualEntitlement,
-              casualUsed,
-              casualRemaining,
+            pw.SizedBox(width: 8),
+            _summaryTile(
+              'SICK',
+              '$sickRemaining',
+              PdfColor.fromInt(0xFFFFF1E5),
+              PdfColor.fromInt(0xFFED6A0C),
+              sub: 'of $sickEntitlement',
             ),
-            _overviewRow(
-              'Sick Leave',
-              sickEntitlement,
-              sickUsed,
-              sickRemaining,
+            pw.SizedBox(width: 8),
+            _summaryTile(
+              'EARNED',
+              '$earnedRemaining',
+              PdfColor.fromInt(0xFFEAF1FF),
+              PdfColor.fromInt(0xFF2D5BDB),
+              sub: 'of $earnedEntitlement',
             ),
-            _overviewRow(
-              'Earned Leave',
-              earnedEntitlement,
-              earnedUsed,
-              earnedRemaining,
+            pw.SizedBox(width: 8),
+            _summaryTile(
+              'TOTAL BAL',
+              '$totalRemaining',
+              PdfColor.fromInt(0xFFE8F5ED),
+              PdfColor.fromInt(0xFF137A3B),
+              sub: 'Rem. days',
             ),
-            _overviewTotalRow(totalEntitlement, totalUsed, totalRemaining),
           ],
         ),
       ],
     );
   }
 
-  static pw.TableRow _overviewRow(
-    String type,
-    int entitlement,
-    int used,
-    int remaining,
-  ) {
-    return pw.TableRow(
-      children: [
-        _td(type),
-        _td(entitlement.toString()),
-        _td(used.toString()),
-        pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-          child: pw.Container(
-            decoration: pw.BoxDecoration(
-              color: _remainingBg(entitlement, remaining),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
-            ),
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            child: pw.Center(
-              child: pw.Text(
-                remaining.toString(),
-                style: pw.TextStyle(
-                  fontSize: 8,
-                  fontWeight: pw.FontWeight.bold,
-                  color: _remainingFg(entitlement, remaining),
-                ),
+  static pw.Widget _summaryTile(
+    String label,
+    String value,
+    PdfColor background,
+    PdfColor valueColor, {
+    String? sub,
+  }) {
+    return pw.Expanded(
+      child: pw.Container(
+        decoration: pw.BoxDecoration(
+          color: background,
+          border: pw.Border.all(color: PdfColor.fromInt(0xFFD7DCE4), width: 0.5),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+        ),
+        padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        child: pw.Column(
+          children: [
+            pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 7,
+                color: PdfColor.fromInt(0xFF667085),
+                fontWeight: pw.FontWeight.bold,
               ),
             ),
-          ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              value,
+              style: pw.TextStyle(
+                fontSize: 16,
+                color: valueColor,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            if (sub != null) ...[
+              pw.SizedBox(height: 2),
+              pw.Text(
+                sub,
+                style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey600),
+              ),
+            ],
+          ],
         ),
-      ],
-    );
-  }
-
-  static pw.TableRow _overviewTotalRow(
-    int entitlement,
-    int used,
-    int remaining,
-  ) {
-    return pw.TableRow(
-      decoration: pw.BoxDecoration(color: PdfColor.fromInt(0xFFF8FAFC)),
-      children: [
-        _td('Total', bold: true),
-        _td(entitlement.toString(), bold: true),
-        _td(used.toString(), bold: true),
-        _td(remaining.toString(), bold: true),
-      ],
+      ),
     );
   }
 
@@ -554,19 +534,5 @@ class LeaveReportPdfService {
       default:
         return PdfColor.fromInt(0xFFB86D00);
     }
-  }
-
-  static PdfColor _remainingBg(int entitlement, int remaining) {
-    final ratio = entitlement <= 0 ? 0 : remaining / entitlement;
-    if (ratio >= 0.5) return PdfColor.fromInt(0xFFE5F8EC);
-    if (ratio >= 0.2) return PdfColor.fromInt(0xFFFFF1E5);
-    return PdfColor.fromInt(0xFFFFEAEF);
-  }
-
-  static PdfColor _remainingFg(int entitlement, int remaining) {
-    final ratio = entitlement <= 0 ? 0 : remaining / entitlement;
-    if (ratio >= 0.5) return PdfColor.fromInt(0xFF1F8D4E);
-    if (ratio >= 0.2) return PdfColor.fromInt(0xFFD46B08);
-    return PdfColor.fromInt(0xFFC62828);
   }
 }

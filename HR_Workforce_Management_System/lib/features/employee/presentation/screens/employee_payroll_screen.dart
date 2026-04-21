@@ -378,16 +378,19 @@ class _EarningsCard extends StatelessWidget {
     return Column(
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Earnings Breakdown',
-              style: GoogleFonts.outfit(
-                color: AppColors.title,
-                fontWeight: FontWeight.w700,
-                fontSize: 28,
+            Expanded(
+              child: Text(
+                'Earnings Breakdown',
+                style: GoogleFonts.outfit(
+                  color: AppColors.title,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 28,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             Text(
               '+ ${_inr(gross)}',
               style: const TextStyle(
@@ -518,16 +521,19 @@ class _DeductionsCard extends StatelessWidget {
     return Column(
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Policy Deductions',
-              style: GoogleFonts.outfit(
-                color: AppColors.title,
-                fontWeight: FontWeight.w700,
-                fontSize: 28,
+            Expanded(
+              child: Text(
+                'Policy Deductions',
+                style: GoogleFonts.outfit(
+                  color: AppColors.title,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 28,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             Text(
               '-${_inr(total)}',
               style: const TextStyle(
@@ -657,16 +663,19 @@ class _PreviousSlipsCard extends StatelessWidget {
     return Column(
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Previous Slips',
-              style: GoogleFonts.outfit(
-                color: AppColors.title,
-                fontWeight: FontWeight.w700,
-                fontSize: 28,
+            Expanded(
+              child: Text(
+                'Previous Slips',
+                style: GoogleFonts.outfit(
+                  color: AppColors.title,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 28,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             const Text(
               'Last 6',
               style: TextStyle(
@@ -899,94 +908,127 @@ class _TaxInfoTab extends StatelessWidget {
             (months.isNotEmpty ? months.first['residentStatus'] : null)
                 as String?;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            BaseCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Tax Summary',
-                    style: GoogleFonts.outfit(
-                      color: AppColors.title,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 24,
-                    ),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: BaseCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tax Summary',
+                        style: GoogleFonts.outfit(
+                          color: AppColors.title,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 24,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Financial Year: $fyLabel',
+                        style: const TextStyle(color: AppColors.muted),
+                      ),
+                      const SizedBox(height: 12),
+                      _TaxSummaryRow(label: 'Taxable Income', value: _inr(taxableIncome)),
+                      const SizedBox(height: 8),
+                      _TaxSummaryRow(label: 'Total Tax Deducted', value: _inr(totalTax)),
+                      const SizedBox(height: 8),
+                      _TaxSummaryRow(
+                        label: 'Remaining Tax',
+                        value: _inr((months.isNotEmpty ? (months.first['remainingTax'] as num?)?.toDouble() : 0) ?? 0),
+                        isBold: true,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Financial Year: $fyLabel',
-                    style: const TextStyle(color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 6),
-                  Text('Taxable Income: ${_inr(taxableIncome)}'),
-                  Text('Total Tax Deducted: ${_inr(totalTax)}'),
-                  Text(
-                    'Remaining Tax: ${_inr((months.isNotEmpty ? (months.first['remainingTax'] as num?)?.toDouble() : 0) ?? 0)}',
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            BaseCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Monthly TDS Breakdown',
-                    style: GoogleFonts.outfit(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.title,
-                    ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: BaseCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Monthly TDS Breakdown',
+                        style: GoogleFonts.outfit(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.title,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      if (months.isEmpty)
+                        const Text('No records available.', style: TextStyle(color: AppColors.muted))
+                      else
+                        ...months.take(6).map((m) {
+                          final label = (m['month'] as String?) ?? (m['id'] as String?) ?? '--';
+                          final value = (m['tds'] as num?)?.toDouble() ??
+                              ((m['professionalTax'] as num?)?.toDouble() ?? 0);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    label,
+                                    style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                                Text(
+                                  _inr(value),
+                                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.title),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  ...months.take(6).map((m) {
-                    final label =
-                        (m['month'] as String?) ?? (m['id'] as String?) ?? '--';
-                    final value =
-                        (m['tds'] as num?)?.toDouble() ??
-                        ((m['professionalTax'] as num?)?.toDouble() ?? 0);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: BaseCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current Tax Regime',
+                        style: GoogleFonts.outfit(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.title,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
-                          Expanded(child: Text(label)),
+                          const Icon(Icons.check_circle_rounded, color: Color(0xFF18A55E), size: 18),
+                          const SizedBox(width: 8),
                           Text(
-                            _inr(value),
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            regime ?? 'New Tax Regime',
+                            style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF18A55E)),
                           ),
                         ],
                       ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            BaseCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Current Tax Regime',
-                    style: GoogleFonts.outfit(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.title,
-                    ),
+                      const SizedBox(height: 14),
+                      _TaxSummaryRow(label: 'PAN Number', value: pan ?? 'Not available'),
+                      const SizedBox(height: 8),
+                      _TaxSummaryRow(label: 'Tax Category', value: 'Individual'),
+                      const SizedBox(height: 8),
+                      _TaxSummaryRow(label: 'Resident Status', value: resident ?? 'Resident'),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text('✔ ${regime ?? 'New Tax Regime'}'),
-                  const SizedBox(height: 10),
-                  Text('PAN Number: ${pan ?? 'Not available'}'),
-                  Text('Tax Category: Individual'),
-                  Text('Resident Status: ${resident ?? 'Resident'}'),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -1214,8 +1256,41 @@ class _EmptyPayroll extends StatelessWidget {
 String _inr(double amount) {
   final format = NumberFormat.currency(
     locale: 'en_IN',
-    symbol: 'Rs',
+    symbol: 'Rs.',
     decimalDigits: 0,
   );
   return format.format(amount);
+}
+
+class _TaxSummaryRow extends StatelessWidget {
+  const _TaxSummaryRow({
+    required this.label,
+    required this.value,
+    this.isBold = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isBold;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: AppColors.muted),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: AppColors.title,
+            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
 }

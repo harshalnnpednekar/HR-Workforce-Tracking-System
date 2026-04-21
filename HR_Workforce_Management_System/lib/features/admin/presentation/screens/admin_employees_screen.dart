@@ -574,7 +574,7 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
                   const SizedBox(height: 12),
                   _SectionTitle(title: 'Work Info'),
                   DropdownButtonFormField<String>(
-                    value: _department,
+                    initialValue: _department,
                     items: _departments
                         .map((d) => DropdownMenuItem(value: d, child: Text(d)))
                         .toList(),
@@ -598,7 +598,7 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: _designation,
+                    initialValue: _designation,
                     items:
                         (_departmentDesignations[_department] ??
                                 const ['Employee'])
@@ -641,7 +641,7 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: _employmentType,
+                    initialValue: _employmentType,
                     items: _employmentTypes
                         .map(
                           (type) =>
@@ -1371,10 +1371,10 @@ class _EmployeeDetailScreenState extends State<_EmployeeDetailScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Basic Salary: ₹${NumberFormat('#,##0').format((user['basicSalary'] as num?) ?? 0)}',
+                      'Basic Salary: Rs. ${NumberFormat('#,##0').format((user['basicSalary'] as num?) ?? 0)}',
                     ),
                     Text(
-                      'Current Net Pay: ₹${NumberFormat('#,##0').format((payroll?['netSalary'] as num?) ?? 0)}',
+                      'Current Net Pay: Rs. ${NumberFormat('#,##0').format((payroll?['netSalary'] as num?) ?? 0)}',
                     ),
                   ],
                 ),

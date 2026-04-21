@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/services/attendance_service.dart';
 import '../../../../core/services/user_service.dart';
+import 'employee_edit_profile_screen.dart';
 import 'shared/employee_dashboard_constants.dart';
 
 class EmployeeHomePage extends StatefulWidget {
@@ -14,12 +17,14 @@ class EmployeeHomePage extends StatefulWidget {
     required this.userId,
     this.onOpenLeaves,
     this.onOpenPayroll,
+    this.onOpenProfile,
   });
 
   final String name;
   final String userId;
   final VoidCallback? onOpenLeaves;
   final VoidCallback? onOpenPayroll;
+  final VoidCallback? onOpenProfile;
 
   @override
   State<EmployeeHomePage> createState() => _EmployeeHomePageState();
@@ -66,7 +71,65 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
 
     try {
       if (state == _ClockButtonState.clockIn) {
-        final time = await AttendanceService.clockIn(widget.userId);
+        Map<String, double>? locationMap;
+        var permission = await Geolocator.checkPermission();
+        
+        if (permission == LocationPermission.denied) {
+          if (!mounted) return;
+          final allow = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Location Required'),
+              content: const Text(
+                  'EqHR needs your location to verify attendance. Your location is only recorded at clock-in and is visible to HR.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Allow'),
+                ),
+              ],
+            ),
+          );
+          
+          if (allow == true) {
+            permission = await Geolocator.requestPermission();
+          } else {
+            setState(() {
+              _busy = false;
+            });
+            return;
+          }
+        }
+        
+        if (permission == LocationPermission.deniedForever) {
+          if (!mounted) return;
+          showActionMessage(context, 'Location permission is required to clock in. Please enable it in app settings.');
+          await openAppSettings();
+          setState(() {
+            _busy = false;
+          });
+          return;
+        } else if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
+          try {
+            final position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                timeLimit: Duration(seconds: 5),
+              ),
+            );
+            locationMap = {
+              'lat': position.latitude,
+              'lng': position.longitude,
+            };
+          } catch (e) {
+            debugPrint('Location fetch failed: $e');
+          }
+        }
+
+        final time = await AttendanceService.clockIn(widget.userId, clockInLocation: locationMap);
         if (!mounted) return;
         showActionMessage(
           context,
@@ -104,7 +167,10 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _HomeHeader(userId: widget.userId),
+          _HomeHeader(
+            userId: widget.userId,
+            onOpenProfile: widget.onOpenProfile,
+          ),
           const SizedBox(height: 22),
           FutureBuilder<Map<String, dynamic>?>(
             future: _userFuture,
@@ -317,9 +383,13 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.userId});
+  const _HomeHeader({
+    required this.userId,
+    this.onOpenProfile,
+  });
 
   final String userId;
+  final VoidCallback? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -350,17 +420,51 @@ class _HomeHeader extends StatelessWidget {
         const Spacer(),
         BellIcon(userId: userId),
         const SizedBox(width: 14),
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: const Color(0xFFDDD2BF),
-          child: Text(
-            'A',
-            style: GoogleFonts.outfit(
-              color: AppColors.title,
-              fontWeight: FontWeight.w700,
-              fontSize: 22,
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            InkWell(
+              onTap: onOpenProfile,
+              borderRadius: BorderRadius.circular(22),
+              child: CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFFDDD2BF),
+                child: Text(
+                  'A',
+                  style: GoogleFonts.outfit(
+                    color: AppColors.title,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 22,
+                  ),
+                ),
+              ),
             ),
-          ),
+            Positioned(
+              right: -4,
+              bottom: -2,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EmployeeEditProfileScreen()),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

@@ -12,6 +12,9 @@ class UserModel {
   final String? designationId;
   final String? department;
   final bool isActive;
+  final String? photoUrl;
+  final String? profilePhotoUrl;
+  final Map<String, dynamic>? settings;
 
   const UserModel({
     required this.id,
@@ -23,6 +26,9 @@ class UserModel {
     this.designationId,
     this.department,
     this.isActive = true,
+    this.photoUrl,
+    this.profilePhotoUrl,
+    this.settings,
   });
 
   factory UserModel.fromFirestore(String uid, Map<String, dynamic> data) {
@@ -36,6 +42,9 @@ class UserModel {
       designationId: data['designationId'],
       department: data['department'],
       isActive: data['isActive'] ?? true,
+      photoUrl: data['photoUrl'],
+      profilePhotoUrl: data['profilePhotoUrl'],
+      settings: data['settings'] is Map ? Map<String, dynamic>.from(data['settings']) : null,
     );
   }
 
@@ -48,6 +57,9 @@ class UserModel {
     'designationId': designationId,
     'department': department,
     'isActive': isActive,
+    'photoUrl': photoUrl,
+    'profilePhotoUrl': profilePhotoUrl,
+    'settings': settings,
   };
 
   UserModel copyWith({
@@ -60,6 +72,9 @@ class UserModel {
     String? designationId,
     String? department,
     bool? isActive,
+    String? photoUrl,
+    String? profilePhotoUrl,
+    Map<String, dynamic>? settings,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -71,6 +86,9 @@ class UserModel {
       designationId: designationId ?? this.designationId,
       department: department ?? this.department,
       isActive: isActive ?? this.isActive,
+      photoUrl: photoUrl ?? this.photoUrl,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
+      settings: settings ?? this.settings,
     );
   }
 }

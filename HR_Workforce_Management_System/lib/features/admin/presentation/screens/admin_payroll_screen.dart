@@ -176,8 +176,9 @@ class _AdminPayrollScreenState extends State<AdminPayrollScreen> {
                   professionalTax: parseAmount(profTaxCtrl.text),
                   isHraAuto: autoHra,
                 );
-                if (!mounted) return;
+                if (!sheetContext.mounted) return;
                 Navigator.of(sheetContext).pop();
+                if (!mounted) return;
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -719,7 +720,7 @@ class _EmployeeAvatar extends StatelessWidget {
           width: 58,
           height: 58,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _Fallback(name: name),
+          errorBuilder: (_, _, _) => _Fallback(name: name),
         ),
       );
     }
@@ -1002,7 +1003,7 @@ class _MoneyField extends StatelessWidget {
         onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
-          prefixText: '₹ ',
+          prefixText: 'Rs. ',
           border: const OutlineInputBorder(),
           isDense: true,
         ),

@@ -50,7 +50,7 @@ class AttendanceService {
   }
 
   /// Writes today's clock-in and returns the local captured timestamp.
-  static Future<DateTime> clockIn(String userId) async {
+  static Future<DateTime> clockIn(String userId, {Map<String, double>? clockInLocation}) async {
     final now = DateTime.now();
     final ref = _recordRef(userId, now);
     final isLate = await _isLateClockIn(now);
@@ -73,6 +73,7 @@ class AttendanceService {
       tx.set(ref, {
         'date': _dateKey(now),
         'clockIn': Timestamp.fromDate(now),
+        'clockInLocation': clockInLocation,
         'clockOut': null,
         'totalHours': 0.0,
         'status': isLate ? 'late' : 'present',
@@ -240,7 +241,7 @@ class AttendanceService {
         .get();
     return parentSnap.docs.map((d) {
       final userId = d.reference.parent.parent?.id;
-      return {'id': d.id, if (userId != null) 'userId': userId, ...d.data()};
+      return {'id': d.id, 'userId': ?userId, ...d.data()};
     }).toList();
   }
 
