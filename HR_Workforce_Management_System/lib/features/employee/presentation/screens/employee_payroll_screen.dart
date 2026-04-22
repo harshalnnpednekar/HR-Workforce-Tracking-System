@@ -2,15 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import 'package:printing/printing.dart';
 
 import '../../../../core/services/attendance_report_pdf_service.dart';
 import '../../../../core/services/leave_report_pdf_service.dart';
 import '../../../../core/services/payslip_pdf_service.dart';
 import '../../../../core/services/payroll_service.dart';
 import '../../../../core/services/admin_report_service.dart';
+import '../../../../core/services/pdf_open_service.dart';
 import 'shared/employee_dashboard_constants.dart';
 
 enum _PayrollTabType { currentMonth, taxInfo, documents }
@@ -322,14 +320,12 @@ class _SalaryCard extends StatelessWidget {
   }
 
   Future<void> _openPdf(BuildContext context, String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
-      showActionMessage(context, 'Invalid payslip URL.');
-      return;
-    }
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && context.mounted) {
-      showActionMessage(context, 'Could not open payslip URL.');
+    try {
+      await PdfOpenService.openPdfFromUrl(url);
+    } catch (e) {
+      if (context.mounted) {
+        showActionMessage(context, 'Could not open payslip: $e');
+      }
     }
   }
 
@@ -353,7 +349,7 @@ class _SalaryCard extends StatelessWidget {
       if (uploadedUrl != null && uploadedUrl.isNotEmpty && context.mounted) {
         showActionMessage(context, 'Payslip generated and uploaded.');
       } else if (context.mounted) {
-        showActionMessage(context, 'Payslip shared. Cloud upload unavailable.');
+        showActionMessage(context, 'Payslip opened. Cloud upload unavailable.');
       }
     } catch (_) {
       if (context.mounted) {
@@ -737,14 +733,12 @@ class _PreviousSlipsCard extends StatelessWidget {
   }
 
   Future<void> _openPdf(BuildContext context, String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
-      showActionMessage(context, 'Invalid payslip URL.');
-      return;
-    }
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && context.mounted) {
-      showActionMessage(context, 'Could not open payslip URL.');
+    try {
+      await PdfOpenService.openPdfFromUrl(url);
+    } catch (e) {
+      if (context.mounted) {
+        showActionMessage(context, 'Could not open payslip: $e');
+      }
     }
   }
 
@@ -768,7 +762,7 @@ class _PreviousSlipsCard extends StatelessWidget {
       if (uploadedUrl != null && uploadedUrl.isNotEmpty && context.mounted) {
         showActionMessage(context, 'Payslip generated and uploaded.');
       } else if (context.mounted) {
-        showActionMessage(context, 'Payslip shared. Cloud upload unavailable.');
+        showActionMessage(context, 'Payslip opened. Cloud upload unavailable.');
       }
     } catch (_) {
       if (context.mounted) {
@@ -936,13 +930,25 @@ class _TaxInfoTab extends StatelessWidget {
                         style: const TextStyle(color: AppColors.muted),
                       ),
                       const SizedBox(height: 12),
-                      _TaxSummaryRow(label: 'Taxable Income', value: _inr(taxableIncome)),
+                      _TaxSummaryRow(
+                        label: 'Taxable Income',
+                        value: _inr(taxableIncome),
+                      ),
                       const SizedBox(height: 8),
-                      _TaxSummaryRow(label: 'Total Tax Deducted', value: _inr(totalTax)),
+                      _TaxSummaryRow(
+                        label: 'Total Tax Deducted',
+                        value: _inr(totalTax),
+                      ),
                       const SizedBox(height: 8),
                       _TaxSummaryRow(
                         label: 'Remaining Tax',
-                        value: _inr((months.isNotEmpty ? (months.first['remainingTax'] as num?)?.toDouble() : 0) ?? 0),
+                        value: _inr(
+                          (months.isNotEmpty
+                                  ? (months.first['remainingTax'] as num?)
+                                        ?.toDouble()
+                                  : 0) ??
+                              0,
+                        ),
                         isBold: true,
                       ),
                     ],
@@ -966,11 +972,18 @@ class _TaxInfoTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                       if (months.isEmpty)
-                        const Text('No records available.', style: TextStyle(color: AppColors.muted))
+                        const Text(
+                          'No records available.',
+                          style: TextStyle(color: AppColors.muted),
+                        )
                       else
                         ...months.take(6).map((m) {
-                          final label = (m['month'] as String?) ?? (m['id'] as String?) ?? '--';
-                          final value = (m['tds'] as num?)?.toDouble() ??
+                          final label =
+                              (m['month'] as String?) ??
+                              (m['id'] as String?) ??
+                              '--';
+                          final value =
+                              (m['tds'] as num?)?.toDouble() ??
                               ((m['professionalTax'] as num?)?.toDouble() ?? 0);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 10),
@@ -979,12 +992,18 @@ class _TaxInfoTab extends StatelessWidget {
                                 Expanded(
                                   child: Text(
                                     label,
-                                    style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                      color: AppColors.muted,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                                 Text(
                                   _inr(value),
-                                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.title),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.title,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1012,20 +1031,36 @@ class _TaxInfoTab extends StatelessWidget {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          const Icon(Icons.check_circle_rounded, color: Color(0xFF18A55E), size: 18),
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF18A55E),
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             regime ?? 'New Tax Regime',
-                            style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF18A55E)),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF18A55E),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 14),
-                      _TaxSummaryRow(label: 'PAN Number', value: pan ?? 'Not available'),
+                      _TaxSummaryRow(
+                        label: 'PAN Number',
+                        value: pan ?? 'Not available',
+                      ),
                       const SizedBox(height: 8),
-                      _TaxSummaryRow(label: 'Tax Category', value: 'Individual'),
+                      _TaxSummaryRow(
+                        label: 'Tax Category',
+                        value: 'Individual',
+                      ),
                       const SizedBox(height: 8),
-                      _TaxSummaryRow(label: 'Resident Status', value: resident ?? 'Resident'),
+                      _TaxSummaryRow(
+                        label: 'Resident Status',
+                        value: resident ?? 'Resident',
+                      ),
                     ],
                   ),
                 ),
@@ -1081,41 +1116,26 @@ class _DocumentsTab extends StatelessWidget {
   }
 }
 
-
-
-
 class _HrPolicyDocsList extends StatelessWidget {
   const _HrPolicyDocsList();
 
-  Future<void> _generatePolicyPdf(BuildContext context, String title, String summary) async {
+  Future<void> _generatePolicyPdf(
+    BuildContext context,
+    String title,
+    String summary,
+  ) async {
     showActionMessage(context, 'Preparing $title...');
 
     try {
-      final pdfBytes = await AdminReportService.generateHrPolicyPdf(title, summary);
+      final pdfBytes = await AdminReportService.generateHrPolicyPdf(
+        title,
+        summary,
+      );
       if (!context.mounted) return;
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
-          content: const Text('Choose an action for this policy document.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Printing.layoutPdf(onLayout: (_) => pdfBytes, name: '${title.replaceAll(' ', '_')}.pdf');
-              },
-              child: const Text('PREVIEW', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Printing.sharePdf(bytes: pdfBytes, filename: '${title.replaceAll(' ', '_')}.pdf');
-              },
-              child: const Text('DOWNLOAD / SHARE', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
+      await PdfOpenService.openPdfBytes(
+        pdfBytes,
+        fileName: '${title.replaceAll(' ', '_')}.pdf',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -1128,20 +1148,17 @@ class _HrPolicyDocsList extends StatelessWidget {
     const policies = [
       (
         'Leave Entitlement Policy',
-        'Annual, sick and parental leave allocations for all staff.'
+        'Annual, sick and parental leave allocations for all staff.',
       ),
       (
         'Attendance & Punctuality',
-        'Working hours, grace period, and review workflow.'
+        'Working hours, grace period, and review workflow.',
       ),
       (
         'Remote Work Guidelines',
-        'Eligibility, approval process and equipment responsibilities.'
+        'Eligibility, approval process and equipment responsibilities.',
       ),
-      (
-        'Code of Conduct',
-        'Workplace behavior and grievance standards.'
-      ),
+      ('Code of Conduct', 'Workplace behavior and grievance standards.'),
     ];
 
     return BaseCard(
@@ -1155,7 +1172,8 @@ class _HrPolicyDocsList extends StatelessWidget {
                 label: p.$1,
                 onDownload: () => _generatePolicyPdf(context, p.$1, p.$2),
               ),
-              if (!isLast) const Divider(height: 18, color: AppColors.cardBorder),
+              if (!isLast)
+                const Divider(height: 18, color: AppColors.cardBorder),
             ],
           );
         }).toList(),
@@ -1358,10 +1376,7 @@ class _TaxSummaryRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(color: AppColors.muted),
-          ),
+          child: Text(label, style: const TextStyle(color: AppColors.muted)),
         ),
         Text(
           value,

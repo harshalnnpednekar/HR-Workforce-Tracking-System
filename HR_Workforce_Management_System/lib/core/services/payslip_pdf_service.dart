@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+
+import 'pdf_open_service.dart';
 
 class PayslipPdfService {
   static final _db = FirebaseFirestore.instance;
@@ -435,16 +436,19 @@ class PayslipPdfService {
 
     final bytes = await doc.save();
 
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Payslip_${employeeName}_${month}_$year.pdf',
+    await PdfOpenService.openPdfBytes(
+      bytes,
+      fileName: 'Payslip_${employeeName}_${month}_$year.pdf',
     );
 
     try {
       final storageRef = FirebaseStorage.instance.ref().child(
         'payslips/$uid/$monthYear.pdf',
       );
-      await storageRef.putData(bytes, SettableMetadata(contentType: 'application/pdf'));
+      await storageRef.putData(
+        bytes,
+        SettableMetadata(contentType: 'application/pdf'),
+      );
       final downloadUrl = await storageRef.getDownloadURL();
 
       await _db

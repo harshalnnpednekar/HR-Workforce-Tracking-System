@@ -5,11 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'package:printing/printing.dart';
-
 import '../../../../core/services/attendance_service.dart';
 import '../../../../core/services/user_service.dart';
 import '../../../../core/services/admin_report_service.dart';
+import '../../../../core/services/pdf_open_service.dart';
+import '../../../../services/auth_service.dart';
 import 'employee_edit_profile_screen.dart';
 import 'shared/employee_dashboard_constants.dart';
 
@@ -68,6 +68,21 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
       return;
     }
 
+    final actionLabel = state == _ClockButtonState.clockIn
+        ? 'Clock In'
+        : 'Clock Out';
+    final verified = await LocalAuthService.authenticate(
+      reason: 'Verify identity to $actionLabel',
+    );
+    if (!verified) {
+      if (!mounted) return;
+      showActionMessage(
+        context,
+        'Authentication failed. Cannot ${actionLabel.toLowerCase()}.',
+      );
+      return;
+    }
+
     setState(() {
       _busy = true;
     });
@@ -76,7 +91,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
       if (state == _ClockButtonState.clockIn) {
         Map<String, double>? locationMap;
         var permission = await Geolocator.checkPermission();
-        
+
         if (permission == LocationPermission.denied) {
           if (!mounted) return;
           final allow = await showDialog<bool>(
@@ -84,7 +99,8 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
             builder: (ctx) => AlertDialog(
               title: const Text('Location Required'),
               content: const Text(
-                  'EqHR needs your location to verify attendance. Your location is only recorded at clock-in and is visible to HR.'),
+                'EqHR needs your location to verify attendance. Your location is only recorded at clock-in and is visible to HR.',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
@@ -97,7 +113,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
               ],
             ),
           );
-          
+
           if (allow == true) {
             permission = await Geolocator.requestPermission();
           } else {
@@ -107,32 +123,36 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
             return;
           }
         }
-        
+
         if (permission == LocationPermission.deniedForever) {
           if (!mounted) return;
-          showActionMessage(context, 'Location permission is required to clock in. Please enable it in app settings.');
+          showActionMessage(
+            context,
+            'Location permission is required to clock in. Please enable it in app settings.',
+          );
           await openAppSettings();
           setState(() {
             _busy = false;
           });
           return;
-        } else if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
+        } else if (permission == LocationPermission.always ||
+            permission == LocationPermission.whileInUse) {
           try {
             final position = await Geolocator.getCurrentPosition(
               locationSettings: const LocationSettings(
                 timeLimit: Duration(seconds: 5),
               ),
             );
-            locationMap = {
-              'lat': position.latitude,
-              'lng': position.longitude,
-            };
+            locationMap = {'lat': position.latitude, 'lng': position.longitude};
           } catch (e) {
             debugPrint('Location fetch failed: $e');
           }
         }
 
-        final time = await AttendanceService.clockIn(widget.userId, clockInLocation: locationMap);
+        final time = await AttendanceService.clockIn(
+          widget.userId,
+          clockInLocation: locationMap,
+        );
         if (!mounted) return;
         showActionMessage(
           context,
@@ -397,10 +417,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({
-    required this.userId,
-    this.onOpenProfile,
-  });
+  const _HomeHeader({required this.userId, this.onOpenProfile});
 
   final String userId;
   final VoidCallback? onOpenProfile;
@@ -460,7 +477,9 @@ class _HomeHeader extends StatelessWidget {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const EmployeeEditProfileScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const EmployeeEditProfileScreen(),
+                    ),
                   );
                 },
                 child: Container(
@@ -894,35 +913,23 @@ class _RecentItem extends StatelessWidget {
 class _HrPoliciesSection extends StatelessWidget {
   const _HrPoliciesSection();
 
-  Future<void> _generatePolicyPdf(BuildContext context, String title, String summary) async {
+  Future<void> _generatePolicyPdf(
+    BuildContext context,
+    String title,
+    String summary,
+  ) async {
     showActionMessage(context, 'Preparing $title...');
 
     try {
-      final pdfBytes = await AdminReportService.generateHrPolicyPdf(title, summary);
+      final pdfBytes = await AdminReportService.generateHrPolicyPdf(
+        title,
+        summary,
+      );
       if (!context.mounted) return;
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
-          content: const Text('Choose an action for this policy document.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Printing.layoutPdf(onLayout: (_) => pdfBytes, name: '${title.replaceAll(' ', '_')}.pdf');
-              },
-              child: const Text('PREVIEW', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Printing.sharePdf(bytes: pdfBytes, filename: '${title.replaceAll(' ', '_')}.pdf');
-              },
-              child: const Text('DOWNLOAD / SHARE', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
+      await PdfOpenService.openPdfBytes(
+        pdfBytes,
+        fileName: '${title.replaceAll(' ', '_')}.pdf',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -936,22 +943,22 @@ class _HrPoliciesSection extends StatelessWidget {
       (
         'Leave Entitlement Policy',
         'Annual, sick and parental leave allocations for all staff.',
-        Icons.event_note_rounded
+        Icons.event_note_rounded,
       ),
       (
         'Attendance & Punctuality',
         'Working hours, grace period, and review workflow.',
-        Icons.fact_check_rounded
+        Icons.fact_check_rounded,
       ),
       (
         'Remote Work Guidelines',
         'Eligibility, approval process and equipment responsibilities.',
-        Icons.laptop_mac_rounded
+        Icons.laptop_mac_rounded,
       ),
       (
         'Code of Conduct',
         'Workplace behavior and grievance standards.',
-        Icons.gavel_rounded
+        Icons.gavel_rounded,
       ),
     ];
 
@@ -991,12 +998,19 @@ class _HrPoliciesSection extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           p.$2,
-                          style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.download_rounded, color: AppColors.primary, size: 20),
+                  const Icon(
+                    Icons.download_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ],
               ),
             ),

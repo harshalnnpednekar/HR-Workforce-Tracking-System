@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/services/admin_attendance_service.dart';
 import '../../../../core/services/user_service.dart';
+import '../widgets/admin_attendance_map.dart';
 import '../widgets/admin_ui_kit.dart';
 
 class AdminAttendanceScreen extends StatefulWidget {
@@ -16,10 +17,12 @@ class AdminAttendanceScreen extends StatefulWidget {
 
 class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
   static const String _allDepartments = 'All Dept.';
+  static const String _allEmployees = 'All Employees';
 
   late DateTime _focusedMonth;
   late DateTime _selectedDate;
   String _selectedDepartment = _allDepartments;
+  String _selectedEmployeeKey = _allEmployees;
 
   late Future<AdminAttendanceDayData> _dayFuture;
   Stream<AdminAttendanceDayData>? _todayStream;
@@ -35,17 +38,21 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
   }
 
   Future<void> _autoSelectDateWithLogs() async {
-    final initial = await _dayFuture;
-    if (!mounted || initial.logs.isNotEmpty) return;
+    try {
+      final initial = await _dayFuture;
+      if (!mounted || initial.logs.isNotEmpty) return;
 
-    final latest = await AdminAttendanceService.getLatestAttendanceDate();
-    if (!mounted || latest == null) return;
+      final latest = await AdminAttendanceService.getLatestAttendanceDate();
+      if (!mounted || latest == null) return;
 
-    setState(() {
-      _focusedMonth = DateTime(latest.year, latest.month, 1);
-      _selectedDate = latest;
-      _reload();
-    });
+      setState(() {
+        _focusedMonth = DateTime(latest.year, latest.month, 1);
+        _selectedDate = latest;
+        _reload();
+      });
+    } catch (_) {
+      // Keep the screen functional even if initial preload fails.
+    }
   }
 
   void _reload() {
@@ -323,37 +330,84 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
   }
 
   Widget _buildError() {
-    return AdminSurfaceCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Failed to load attendance overview.',
-            style: TextStyle(
-              color: Color(0xFF991B1B),
-              fontWeight: FontWeight.w700,
-            ),
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
+      children: [
+        AdminSurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Failed to load attendance overview.',
+                style: TextStyle(
+                  color: Color(0xFF991B1B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(onPressed: _onRefresh, child: const Text('Retry')),
+            ],
           ),
-          const SizedBox(height: 8),
-          TextButton(onPressed: _onRefresh, child: const Text('Retry')),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildContent(AdminAttendanceDayData vm) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final sidePadding = screenWidth > 1024
+        ? ((screenWidth - 1024) / 2) + 18
+        : 18.0;
+
     final availableDepartments = [_allDepartments, ...vm.departments];
-    final visibleLogs = _selectedDepartment == _allDepartments
+    final employeeOptions = <MapEntry<String, String>>[];
+    final seenEmployeeKeys = <String>{};
+    for (final item in vm.logs) {
+      final key = _employeeKeyFor(item);
+      if (seenEmployeeKeys.add(key)) {
+        employeeOptions.add(MapEntry(key, item.name));
+      }
+    }
+    employeeOptions.sort(
+      (a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()),
+    );
+
+    final validEmployeeKeys = <String>{
+      _allEmployees,
+      ...employeeOptions.map((e) => e.key),
+    };
+    final effectiveEmployeeKey =
+        validEmployeeKeys.contains(_selectedEmployeeKey)
+        ? _selectedEmployeeKey
+        : _allEmployees;
+
+    if (effectiveEmployeeKey != _selectedEmployeeKey) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _selectedEmployeeKey = _allEmployees;
+        });
+      });
+    }
+
+    final departmentFilteredLogs = _selectedDepartment == _allDepartments
         ? vm.logs
         : vm.logs
               .where((item) => item.department == _selectedDepartment)
+              .toList();
+
+    final visibleLogs = effectiveEmployeeKey == _allEmployees
+        ? departmentFilteredLogs
+        : departmentFilteredLogs
+              .where((item) => _employeeKeyFor(item) == effectiveEmployeeKey)
               .toList();
 
     return ListView(
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 160),
+      padding: EdgeInsets.fromLTRB(sidePadding, 12, sidePadding, 160),
       children: [
         Row(
           children: [
@@ -424,6 +478,18 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
             });
           },
         ),
+        const SizedBox(height: 12),
+        _EmployeeFilterDropdown(
+          selectedKey: effectiveEmployeeKey,
+          options: employeeOptions,
+          onChanged: (value) {
+            setState(() {
+              _selectedEmployeeKey = value;
+            });
+          },
+        ),
+        const SizedBox(height: 18),
+        AdminAttendanceMap(selectedDate: _selectedDate, logs: visibleLogs),
         const SizedBox(height: 24),
         Row(
           children: [
@@ -467,6 +533,14 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
   DateTime? _mergeDateAndTime(DateTime day, TimeOfDay? time) {
     if (time == null) return null;
     return DateTime(day.year, day.month, day.day, time.hour, time.minute);
+  }
+
+  String _employeeKeyFor(AdminAttendanceLogData item) {
+    final id = item.userId.trim();
+    if (id.isNotEmpty) {
+      return 'id:$id';
+    }
+    return 'name:${item.name.trim().toLowerCase()}';
   }
 }
 
@@ -769,6 +843,67 @@ class _DepartmentFilterRow extends StatelessWidget {
   }
 }
 
+class _EmployeeFilterDropdown extends StatelessWidget {
+  const _EmployeeFilterDropdown({
+    required this.selectedKey,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String selectedKey;
+  final List<MapEntry<String, String>> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminSurfaceCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.person_search_rounded,
+            color: AdminColors.primary,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Employee',
+            style: TextStyle(
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedKey,
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: _AdminAttendanceScreenState._allEmployees,
+                    child: Text('All Employees'),
+                  ),
+                  ...options.map(
+                    (entry) => DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  onChanged(value);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AttendanceLogCard extends StatelessWidget {
   const _AttendanceLogCard({required this.item});
 
@@ -841,7 +976,11 @@ class _AttendanceLogCard extends StatelessWidget {
                           onTap: () {
                             final lat = item.clockInLocation!['lat'];
                             final lng = item.clockInLocation!['lng'];
-                            launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng'));
+                            launchUrl(
+                              Uri.parse(
+                                'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+                              ),
+                            );
                           },
                           child: const Icon(
                             Icons.location_on_rounded,
@@ -869,6 +1008,7 @@ class _AttendanceLogCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Container(
@@ -890,15 +1030,15 @@ class _AttendanceLogCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Flexible(
-                  child: Text(
-                    _durationLabel(item),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF8090A8),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
+                Text(
+                  _durationLabel(item),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF8090A8),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
                   ),
                 ),
               ],

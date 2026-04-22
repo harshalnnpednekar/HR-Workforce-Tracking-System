@@ -119,7 +119,11 @@ class AdminAttendanceService {
       return rows;
     }
 
-    return _fallbackRecordsForDate(dateKey);
+    try {
+      return await _fallbackRecordsForDate(dateKey);
+    } catch (_) {
+      return const [];
+    }
   }
 
   static Future<List<Map<String, dynamic>>> _fallbackRecordsForDate(

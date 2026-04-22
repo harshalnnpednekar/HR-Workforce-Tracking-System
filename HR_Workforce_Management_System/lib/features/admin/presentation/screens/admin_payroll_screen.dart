@@ -1051,7 +1051,7 @@ class _PayrollDetailScreenState extends State<PayrollDetailScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payslip generated and shared.')),
+        const SnackBar(content: Text('Payslip generated and opened.')),
       );
     } catch (e) {
       if (!mounted) return;

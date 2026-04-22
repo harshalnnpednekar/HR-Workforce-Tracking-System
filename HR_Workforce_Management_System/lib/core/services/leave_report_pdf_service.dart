@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import 'leave_service.dart';
+import 'pdf_open_service.dart';
 
 class LeaveReportPdfService {
   static final _db = FirebaseFirestore.instance;
@@ -86,9 +86,9 @@ class LeaveReportPdfService {
 
     final bytes = await doc.save();
 
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Leave_Summary_${employeeName}_${DateTime.now().year}.pdf',
+    await PdfOpenService.openPdfBytes(
+      bytes,
+      fileName: 'Leave_Summary_${employeeName}_${DateTime.now().year}.pdf',
     );
   }
 
@@ -246,7 +246,10 @@ class LeaveReportPdfService {
       child: pw.Container(
         decoration: pw.BoxDecoration(
           color: background,
-          border: pw.Border.all(color: PdfColor.fromInt(0xFFD7DCE4), width: 0.5),
+          border: pw.Border.all(
+            color: PdfColor.fromInt(0xFFD7DCE4),
+            width: 0.5,
+          ),
           borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
         ),
         padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -273,7 +276,10 @@ class LeaveReportPdfService {
               pw.SizedBox(height: 2),
               pw.Text(
                 sub,
-                style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey600),
+                style: const pw.TextStyle(
+                  fontSize: 6,
+                  color: PdfColors.grey600,
+                ),
               ),
             ],
           ],

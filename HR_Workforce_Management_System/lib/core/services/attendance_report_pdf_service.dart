@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import 'attendance_service.dart';
+import 'pdf_open_service.dart';
 
 class AttendanceReportPdfService {
   static final _db = FirebaseFirestore.instance;
@@ -71,9 +71,9 @@ class AttendanceReportPdfService {
 
     final bytes = await doc.save();
 
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename:
+    await PdfOpenService.openPdfBytes(
+      bytes,
+      fileName:
           'Attendance_Report_${employeeName}_${_monthFile(targetMonth)}.pdf',
     );
   }

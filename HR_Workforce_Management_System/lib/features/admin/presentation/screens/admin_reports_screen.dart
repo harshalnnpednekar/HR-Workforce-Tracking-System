@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:printing/printing.dart';
 
 import '../widgets/admin_ui_kit.dart';
 import '../../../../core/services/admin_report_service.dart';
+import '../../../../core/services/pdf_open_service.dart';
 
 class AdminReportsScreen extends ConsumerWidget {
   const AdminReportsScreen({super.key});
 
-  Future<void> _selectMonthAndGenerate(BuildContext context, String title, Function(DateTime) onGenerate) async {
+  Future<void> _selectMonthAndGenerate(
+    BuildContext context,
+    String title,
+    Function(DateTime) onGenerate,
+  ) async {
     final now = DateTime.now();
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -21,42 +25,26 @@ class AdminReportsScreen extends ConsumerWidget {
 
     if (picked != null) {
       if (!context.mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Generating PDF...'), duration: Duration(seconds: 2)),
+        const SnackBar(
+          content: Text('Generating PDF...'),
+          duration: Duration(seconds: 2),
+        ),
       );
 
       try {
         final pdfBytes = await onGenerate(picked);
         if (!context.mounted) return;
 
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Report Generated: $title', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            content: const Text('Choose how you want to handle the generated PDF report.'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Printing.layoutPdf(onLayout: (_) => pdfBytes, name: '$title.pdf');
-                },
-                child: const Text('PREVIEW', style: TextStyle(color: AdminColors.primary)),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Printing.sharePdf(bytes: pdfBytes, filename: '$title.pdf');
-                },
-                child: const Text('SHARE / DOWNLOAD', style: TextStyle(color: AdminColors.primary)),
-              ),
-            ],
-          ),
-        );
+        await PdfOpenService.openPdfBytes(pdfBytes, fileName: '$title.pdf');
       } catch (e) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating report: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error generating report: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -67,31 +55,13 @@ class AdminReportsScreen extends ConsumerWidget {
       const SnackBar(content: Text('Generating Headcount Report...')),
     );
     try {
-      final pdfBytes = await AdminReportService.generateHeadcountOverviewReport();
+      final pdfBytes =
+          await AdminReportService.generateHeadcountOverviewReport();
       if (!context.mounted) return;
-      
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Headcount Report Generated', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          content: const Text('Choose an action for the headcount overview.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Printing.layoutPdf(onLayout: (_) => pdfBytes, name: 'Headcount_Report.pdf');
-              },
-              child: const Text('PREVIEW', style: TextStyle(color: AdminColors.primary)),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Printing.sharePdf(bytes: pdfBytes, filename: 'Headcount_Report.pdf');
-              },
-              child: const Text('SHARE / DOWNLOAD', style: TextStyle(color: AdminColors.primary)),
-            ),
-          ],
-        ),
+
+      await PdfOpenService.openPdfBytes(
+        pdfBytes,
+        fileName: 'Headcount_Report.pdf',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -128,7 +98,8 @@ class AdminReportsScreen extends ConsumerWidget {
       ),
       _ReportItem(
         title: 'Payroll Variance Report',
-        summary: 'Review month-over-month payroll changes, deductions and payouts.',
+        summary:
+            'Review month-over-month payroll changes, deductions and payouts.',
         accent: const Color(0xFFE9F9EF),
         icon: Icons.account_balance_wallet_rounded,
         onTap: () => _selectMonthAndGenerate(
